@@ -52,8 +52,11 @@ PATH:LINE:COLUMN: error: MESSAGE
 ```
 
 Lines and columns start at 1. Columns count Unicode scalar values, so a tab is
-one column. The lexer and parser stop at the first error in the file. The checker
-reports the first error in each function, in source order.
+one column. An encoding error points to the first invalid byte, with its column
+counted after the valid characters before it. The lexer and parser stop at the
+first error in the file. The checker first checks function signatures and the
+entry point. Once those are valid, it reports at most one body error per
+function, visiting functions in source order.
 
 ## Language
 
@@ -242,10 +245,13 @@ before the panic is written to stdout first.
 | `division by zero` | `/` or `%` with a zero divisor |
 | `call depth limit exceeded` | a call would make more than 10000 calls active at once, counting `main` |
 
-The interpreter and native executables apply the same call depth limit, so deep
-recursion panics identically on both. Native frames must still fit the
-platform's stack; with the usual 8 MiB main-thread stack they do. Infinite
-loops run forever on both lanes.
+The interpreter and native executables apply the same call-count guard. Their
+host resource limits differ: the interpreter uses a 512 MiB worker stack, while
+native executables use the platform's main-thread stack. Large frames or deep
+recursion can exhaust either stack before the guard is reached. Host memory or
+stack exhaustion is outside the portable contract and may terminate execution
+without a Chasm panic. Infinite loops run forever on both lanes while host
+resources remain available.
 
 A program that returns from `main` exits with status 0. Write errors on stdout
 are not part of the portable contract: the interpreter reports one as an error
@@ -267,8 +273,8 @@ source → lexer → parser → checker + lowering → typed IR → IR validator
 - The validator independently rechecks types, variable and string indices,
   `break` placement, and that value-returning functions return on every path. It
   catches some lowering bugs; it is not a soundness proof.
-- The interpreter is the reference lane. The C backend must match its stdout,
-  stderr, and exit status on every program.
+- The interpreter is the reference lane. Within the stated host resource and
+  output limits, the C backend must match its stdout, stderr, and exit status.
 - Generated C uses `__builtin_*_overflow` for checked arithmetic and never uses
   program text as a format string. String literals and the source path are
   emitted with octal escapes for every byte outside printable ASCII and for
