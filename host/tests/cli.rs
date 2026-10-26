@@ -261,6 +261,27 @@ fn help_and_version_reject_extra_arguments_as_usage_errors() {
     }
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn help_and_version_report_output_failure_without_panicking() {
+    // Proves an unwritable output stream is an ordinary error for informational commands.
+    for command in ["help", "--version"] {
+        let full = fs::OpenOptions::new()
+            .write(true)
+            .open("/dev/full")
+            .unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_chasm"))
+            .arg(command)
+            .stdout(full)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        let diagnostic = String::from_utf8(output.stderr).unwrap();
+        assert!(diagnostic.contains("cannot write output"), "{diagnostic}");
+        assert!(!diagnostic.contains("panicked"), "{diagnostic}");
+    }
+}
+
 #[test]
 fn building_cannot_destroy_the_input_program() {
     // Proves accidentally choosing the source as the output leaves the source intact.

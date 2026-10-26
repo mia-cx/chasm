@@ -73,14 +73,8 @@ fn execute(args: &[OsString]) -> ExitCode {
         }
     };
     match cli {
-        Cli::Help => {
-            println!("{USAGE}");
-            ExitCode::SUCCESS
-        }
-        Cli::Version => {
-            println!("chasm {}", env!("CARGO_PKG_VERSION"));
-            ExitCode::SUCCESS
-        }
+        Cli::Help => write_stdout(format!("{USAGE}\n").as_bytes()),
+        Cli::Version => write_stdout(format!("chasm {}\n", env!("CARGO_PKG_VERSION")).as_bytes()),
         Cli::Check(path) => match compile(&path) {
             Ok(_) => ExitCode::SUCCESS,
             Err(code) => code,
