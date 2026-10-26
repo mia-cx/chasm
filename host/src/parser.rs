@@ -344,6 +344,9 @@ impl Parser {
         self.bump();
         let mut args: Vec<Arg> = Vec::new();
         while *self.peek() != Tok::RParen {
+            if matches!(self.peek(), Tok::Invalid(_)) {
+                return Err(self.unexpected("an argument"));
+            }
             let name = match self.peek() {
                 Tok::Ident(name) if self.peek_at(1) == &Tok::Colon => {
                     let name = (name.clone(), self.span());

@@ -189,6 +189,26 @@ fn invalid_or_unsupported_source_has_a_diagnostic() {
 }
 
 #[test]
+fn invalid_arguments_preserve_the_lexer_diagnostic() {
+    // Proves a malformed argument after a named one reports the lexical cause.
+    for (argument, expected) in [
+        ("é: 2", "unexpected character"),
+        ("mut: 2", "this alpha does not support"),
+        ("@", "unexpected character"),
+        ("\"oops", "unterminated string literal"),
+    ] {
+        let fixture = Fixture::new(&format!(
+            "fn f(a: Int, b: Int) {{}}\nfn main() {{ f(a: 1, {argument}) }}"
+        ));
+        let output = fixture.command("check");
+        assert_eq!(output.status.code(), Some(1));
+        let diagnostic = String::from_utf8(output.stderr).unwrap();
+        assert!(diagnostic.contains(expected), "{diagnostic}");
+        assert!(diagnostic.contains(":2:21: error:"), "{diagnostic}");
+    }
+}
+
+#[test]
 fn declaration_errors_point_to_the_first_invalid_part() {
     // Proves declaration diagnostics identify the binding or type before its initializer.
     for (source, location, message) in [
