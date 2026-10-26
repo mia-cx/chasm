@@ -8,6 +8,19 @@ Its syntax makes structural relationships visible. `::` traverses namespaces, `#
 
 This proposal is the entry point for the language. The detailed design notes in [`docs/`](docs/) are canonical. A retained summary of the lost July 15, 2026 conversation supplies provenance and additional decisions. Where the sources conflict, this proposal follows the canonical notes and records the discrepancy.
 
+## Implementation research
+
+No compiler or runtime exists yet. These proposals turn the language direction
+into a buildable subset; their new language rules remain recommendations.
+
+- [Compiler plan](docs/compiler-plan.md): bootstrap host, execution backends, milestones, and self-hosting.
+- [Bootstrap language](docs/bootstrap-language.md): proposed subset and semantic acceptance cases.
+- [Feasibility audit](docs/compiler-audit.md): counterexamples and conditions the implementation must satisfy.
+- [Bend lessons](docs/bend-lessons.md): useful mechanisms and their trust boundaries.
+- [Behavior contracts](docs/behavior-contracts.md): the open proposal for a test-driven language.
+
+[Project direction](DIRECTION.md) records current priorities.
+
 ## Goals
 
 Chasm should be:
@@ -56,7 +69,9 @@ The bytecode VM supports scripting, the REPL, plugins, hot module replacement, a
 
 Every backend implements the same evaluation order, numeric behavior, value semantics, mutation rules, errors, and cleanup behavior. Host APIs and low-level capabilities may differ by target, but those differences must be explicit.
 
-The VM is the initial semantic reference. A shared conformance suite should compare observable behavior across backends.
+The [compiler plan](docs/compiler-plan.md) recommends an interpreter over typed IR
+as the initial semantic reference, with the bytecode VM added later. A shared
+conformance suite should compare observable behavior across backends.
 
 ## Structural syntax
 
@@ -388,7 +403,7 @@ The language direction is established. These areas still need precise specificat
 6. Imports, package boundaries, initialization, and `.chsm` behavior.
 7. Native ABI, bytecode format, VM instruction set, and compile-time evaluation.
 8. Reflection, attributes, package management, formatting, testing, documentation, and debugging.
-9. The bootstrap path from the initial C# compiler to a self-hosted Chasm compiler.
+9. Validation of the proposed Rust bootstrap and staged port to a self-hosted Chasm compiler.
 
 Every decision should preserve the central promise: Chasm code makes structure, behavior, data access, ownership, and mutation visible where they happen.
 

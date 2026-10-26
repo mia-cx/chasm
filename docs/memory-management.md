@@ -119,7 +119,7 @@ Value semantics and allocation regions answer different questions:
 - Value semantics determine whether mutating a parameter can affect the caller.
 - Regions determine where dynamically allocated backing storage lives and when it is reclaimed.
 
-Passing `String`, `Array`, or another container by value must not accidentally create shared mutable state merely because its backing storage is regional. Chasm still guarantees independent observable value semantics unless the program uses an explicit borrow.
+Passing `String`, `Array`, or another container by value must not accidentally create shared mutable state merely because its backing storage is regional. Chasm still guarantees independent observable value semantics unless the program uses an explicit borrow. A proposed refinement limits that guarantee to ordinary copyable data and gives resources move-only ownership ([Bootstrap language](bootstrap-language.md#values-copies-and-moves)).
 
 The implementation may use moves, copy-on-write, uniqueness analysis, or copy elision to avoid unnecessary deep copies, provided those optimizations do not change observable behavior.
 
@@ -144,8 +144,10 @@ fn process() {
 
 Chasm tracks finalizable resources separately from ordinary arena allocations. Destroying a region performs two phases:
 
-1. Run registered resource finalizers in reverse registration order.
+1. Run registered resource finalizers, each while its dependencies are still alive.
 2. Reset or release the region's memory blocks.
+
+Reverse registration order is a natural default, but once moves and promotion reorder registrations it no longer proves that each finalizer's dependencies are alive. The ordering rule needs its own cleanup traces.
 
 Strings, arrays, syntax nodes, and ordinary records need no individual destruction when they contain no finalizable resources. They disappear with their region.
 
@@ -156,6 +158,8 @@ Moving or promoting a resource must transfer its cleanup registration to the des
 A borrow may not outlive the region containing the borrowed value. A value promoted into a wider region may not retain references into a narrower region unless those referenced values are promoted as well.
 
 This constraint is necessary to prevent examples such as an application-lifetime `Project` retaining a pointer into a function's temporary region. The compiler's escape and borrow analysis must validate the complete reachable ownership graph, not only the outer struct.
+
+Promotion follows owned edges only. A borrowed edge is never promoted implicitly, because copying the borrowed value would change its identity and mutation relationships. An escape through a borrowed edge is rejected unless the program copies explicitly. The bootstrap subset sidesteps this by forbidding stored borrows ([Bootstrap language](bootstrap-language.md#borrows-and-exclusivity)).
 
 Raw pointers remain an unsafe escape hatch and do not receive these guarantees.
 
@@ -198,7 +202,7 @@ Chasm's intended middle ground is automatic regional allocation with explicit, v
 
 ## Open Semantic Questions
 
-This direction still requires precise answers for:
+The [bootstrap subset](bootstrap-language.md#regions-and-promotion) proposes conservative answers for a first compiler, and its known retention limit. The full direction above remains the goal. It still requires precise answers for:
 
 - The syntax for named regions and explicit promotion
 - Whether promotion may ever perform an implicit deep copy

@@ -81,6 +81,8 @@ JavaScript compilation powers:
 
 All backends implement the same core language and semantic model. Host APIs and low-level capabilities may differ by target.
 
+The [compiler plan](compiler-plan.md) proposes an interpreter over typed IR as the initial semantic reference. The bytecode VM comes later and is checked against it.
+
 See [JavaScript Backend](javascript-backend.md) for the detailed design notes.
 
 ## Data-Oriented Design
@@ -253,7 +255,7 @@ T          owned local value
 *mut T     raw mutable pointer
 ```
 
-Values have independent semantics by default. Read-only and mutable borrows are explicit at the declaration and call site. A borrow may not outlive the region containing its value. Raw pointers are reserved for operations such as FFI, manual memory management, unsafe code, and pointer arithmetic.
+Values have independent semantics by default. A proposed refinement limits that to ordinary copyable data and gives resources move-only ownership ([Bootstrap language](bootstrap-language.md#values-copies-and-moves)). Read-only and mutable borrows are explicit at the declaration and call site. A borrow may not outlive the region containing its value. Raw pointers are reserved for operations such as FFI, manual memory management, unsafe code, and pointer arithmetic.
 
 Ordinary regional memory is reclaimed in batches without per-value destruction. Files, sockets, mutexes, GPU buffers, foreign handles, and other finalizable resources still receive deterministic cleanup before their region is reset.
 
@@ -371,6 +373,8 @@ std::fs#readFile(projectConfig)
 `ProjectConfig` satisfies the required shape. Its extra `retries` field is ignored by `readFile`. This allows one project configuration to be consumed by independent tools, each of which projects only the fields it declares.
 
 Structural parameter projection removes many common reasons for function overloading.
+
+The parameter object is a conceptual model, applied once per call. A struct argument is never spread across separate parameters. The [bootstrap subset](bootstrap-language.md#structural-projection) proposes projection only into anonymous record parameter types, copying the selected fields with no layout cast, after self-hosting.
 
 ### Overloads
 
@@ -552,28 +556,14 @@ There are no core semantic differences between these workflows. Host APIs and lo
 
 ## Self-Hosting
 
-The initial Chasm compiler will be implemented in C#:
+The initial compiler is written in a temporary host language, then rewritten in Chasm:
 
-```text
-C#
-    ↓
-Chasm compiler
-```
-
-The compiler can eventually be rewritten in Chasm:
-
-```text
-Chasm
-    ↓
-Chasm compiler
-```
-
-The proposed bootstrap process is:
-
-1. Build the initial compiler in C#.
-2. Rewrite the compiler in Chasm.
+1. Build the initial compiler in the host language.
+2. Rewrite the compiler in Chasm, pass by pass.
 3. Use the Chasm compiler to compile itself.
-4. Retain the C# compiler only as a bootstrap implementation.
+4. Retain the host compiler only as a bootstrap implementation.
+
+The [compiler plan](compiler-plan.md#compiler-host) recommends Rust provisionally, with stable F# as the fallback, and compares C# and other hosts. That choice is a recommendation, not a settled decision.
 
 ## Design Inspirations
 

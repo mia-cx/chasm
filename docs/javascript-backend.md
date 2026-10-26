@@ -220,7 +220,7 @@ Chasm should not implement its own JavaScript bundler.
 
 ## Backend Conformance
 
-The VM is the initial semantic reference. A shared conformance suite should run equivalent programs through the VM, JavaScript, and native backends and compare observable behavior.
+The [compiler plan](compiler-plan.md) proposes an interpreter over typed IR as the initial semantic reference, with the bytecode VM checked against it later. A shared conformance suite should run equivalent programs through the reference, JavaScript, and native backends and compare observable behavior. Parity covers specified observations on supported capabilities, within stated resource limits.
 
 The suite must cover:
 
@@ -236,7 +236,7 @@ The suite must cover:
 
 ## Proposed Implementation Order
 
-1. Establish the VM or interpreter as the semantic reference.
+1. Establish the typed-IR interpreter as the semantic reference.
 2. Emit standards-based ESM from typed IR.
 3. Add source maps and browser debugging.
 4. Implement Chasm value semantics in generated JavaScript.

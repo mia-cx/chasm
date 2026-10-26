@@ -203,11 +203,13 @@ Chasm application
 Each plugin should receive an explicit capability-oriented host API and own a region or runtime context. Unloading a plugin should:
 
 1. Prevent new calls into it.
-2. Invalidate or unregister callbacks.
-3. Release foreign-runtime roots.
-4. Run Chasm resource finalizers.
+2. Unregister its callbacks and quiesce calls already in progress. Code, captured environments, foreign context, and every root a finalizer may use stay alive.
+3. Run Chasm resource finalizers, each while its dependencies are still alive.
+4. Release foreign-runtime roots.
 5. Reset the plugin region.
 6. Destroy or recycle its foreign runtime context.
+
+When active calls cannot be quiesced, or a finalizer's dependencies cannot be shown alive, the unload is refused. Preventing new calls does not establish quiescence, and reverse registration order alone does not prove a finalizer's dependencies are alive. The [compiler audit](compiler-audit.md#3-deterministic-cleanup-must-survive-transfer-failure-and-suspension) lists the cases.
 
 Untrusted Node.js code is not sandboxed merely because it is loaded as a plugin. Untrusted plugins require process isolation, explicit capabilities, resource limits, and controlled filesystem, network, and environment access.
 

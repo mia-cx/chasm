@@ -28,6 +28,8 @@ fn readFile(args: ReadFileArgs)
 
 The compiler omits the explicit parameter-object construction syntax. This gives every function a consistent underlying model while preserving pleasant call-site ergonomics.
 
+The model is conceptual and applies once per call. Lowering never wraps a parameter object in another, and a struct argument is never spread across separate parameters, so each call has exactly one meaning.
+
 ## Named Arguments
 
 Named arguments are preferred when they make a call easier to understand:
@@ -119,6 +121,8 @@ tests#run(project)
 
 Each tool projects only the fields it declares.
 
+The [bootstrap subset](bootstrap-language.md#structural-projection) proposes the precise rule: projection targets only anonymous record parameter types, copies exactly the selected fields with no layout cast, and leaves unused fields with their owner. Named structs stay nominal.
+
 ## Value Semantics by Default
 
 Passing a value normally gives the function an independent local value:
@@ -143,6 +147,8 @@ print(config.lineWidth)
 Mutating a value parameter affects only the function's local value. It does not mutate the caller's value.
 
 This is a semantic guarantee, not a requirement to perform a physical copy. The compiler may use moves, copy elision, or other optimizations whenever observable behavior remains identical.
+
+A proposed refinement limits the guarantee to ordinary copyable data and gives resources move-only ownership. The [bootstrap subset](bootstrap-language.md#borrows-and-exclusivity) also defines when a value argument is snapshotted relative to borrowed arguments.
 
 ## Explicit Read-Only Borrowing
 
