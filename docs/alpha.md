@@ -115,7 +115,7 @@ calls to it may only be used as statements. Other type names, including `I64`,
 ### Grammar
 
 ```ebnf
-file      = { fn_decl } ;
+file      = { fn_decl FN_END } ;           (* FN_END: newline or end of file; blank lines allowed *)
 fn_decl   = "fn" IDENT "(" [ params ] ")" [ "->" type ] block ;
 params    = param { "," param } [ "," ] ;
 param     = IDENT ":" type ;
