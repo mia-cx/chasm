@@ -117,6 +117,10 @@ fn parse_args(args: &[OsString]) -> Result<Cli, String> {
     match command.to_str() {
         Some("help" | "-h" | "--help") if rest.is_empty() => Ok(Cli::Help),
         Some("--version" | "-V") if rest.is_empty() => Ok(Cli::Version),
+        Some("help" | "-h" | "--help" | "--version" | "-V") => Err(format!(
+            "`{}` takes no arguments",
+            command.to_string_lossy()
+        )),
         Some("check") => Ok(Cli::Check(single_path("check", &rest)?)),
         Some("run") => Ok(Cli::Run(single_path("run", &rest)?)),
         Some("emit") => match rest.split_first() {
@@ -182,14 +186,35 @@ fn is_option(arg: &OsString) -> bool {
 fn compile(path: &Path) -> Result<ir::Program, ExitCode> {
     let shown = path.to_string_lossy();
     let bytes = fs::read(path).map_err(|error| fail(&format!("cannot read `{shown}`: {error}")))?;
-    let source = String::from_utf8(bytes)
-        .map_err(|_| fail(&format!("`{shown}` is not valid UTF-8 text")))?;
     let report = |diagnostics: &[diag::Diagnostic]| {
         for diagnostic in diagnostics {
             eprintln!("{}", diagnostic.render(&shown));
         }
         ExitCode::from(PROGRAM_ERROR)
     };
+    let source = String::from_utf8(bytes).map_err(|error| {
+        let prefix = &error.as_bytes()[..error.utf8_error().valid_up_to()];
+        let prefix = std::str::from_utf8(prefix).expect("UTF-8 error identifies a valid prefix");
+        let span = prefix
+            .chars()
+            .fold(diag::Span { line: 1, col: 1 }, |span, c| {
+                if c == '\n' {
+                    diag::Span {
+                        line: span.line + 1,
+                        col: 1,
+                    }
+                } else {
+                    diag::Span {
+                        col: span.col + 1,
+                        ..span
+                    }
+                }
+            });
+        report(&[diag::Diagnostic::new(
+            span,
+            "source is not valid UTF-8 text",
+        )])
+    })?;
     let decls = parser::parse(lexer::lex(&source)).map_err(|d| report(&[d]))?;
     let program = lower::lower(&decls).map_err(|d| report(&d))?;
     if let Err(error) = validate::validate(&program) {

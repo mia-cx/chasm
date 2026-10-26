@@ -183,21 +183,21 @@ impl FnLower<'_> {
                 ty,
                 value,
             } => {
-                let (rvalue, value_ty) = self.rvalue(value, out)?;
-                if let Some(ty) = ty {
-                    let declared = resolve_type(ty)?;
-                    if declared != value_ty {
-                        let message = format!(
-                            "`{name}` is declared as {}, but its value is {}",
-                            declared.name(),
-                            value_ty.name()
-                        );
-                        return Err(Diagnostic::new(value.span, message));
-                    }
-                }
                 if self.lookup(name).is_some() {
                     let message = format!("a variable named `{name}` is already visible here");
                     return Err(Diagnostic::new(*span, message));
+                }
+                let declared_ty = ty.as_ref().map(resolve_type).transpose()?;
+                let (rvalue, value_ty) = self.rvalue(value, out)?;
+                if let Some(declared) = declared_ty
+                    && declared != value_ty
+                {
+                    let message = format!(
+                        "`{name}` is declared as {}, but its value is {}",
+                        declared.name(),
+                        value_ty.name()
+                    );
+                    return Err(Diagnostic::new(value.span, message));
                 }
                 let dst = self.declare(name, value_ty);
                 out.push(Stmt::Assign { dst, value: rvalue });

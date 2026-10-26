@@ -189,6 +189,59 @@ fn invalid_or_unsupported_source_has_a_diagnostic() {
 }
 
 #[test]
+fn declaration_errors_point_to_the_first_invalid_part() {
+    // Proves declaration diagnostics identify the binding or type before its initializer.
+    for (source, location, message) in [
+        (
+            "fn main() {\nlet x = 1\nlet x = nope\n}",
+            ":3:5: error:",
+            "already visible",
+        ),
+        (
+            "fn main() {\nlet x: Foo = nope\n}",
+            ":2:8: error:",
+            "unknown type `Foo`",
+        ),
+    ] {
+        let fixture = Fixture::new(source);
+        let output = fixture.command("check");
+        assert_eq!(output.status.code(), Some(1));
+        let diagnostic = String::from_utf8(output.stderr).unwrap();
+        assert!(diagnostic.contains(location), "{diagnostic}");
+        assert!(diagnostic.contains(message), "{diagnostic}");
+    }
+}
+
+#[test]
+fn invalid_utf8_has_a_character_based_source_location() {
+    // Proves invalid encoding points to the bad byte after a valid Unicode prefix.
+    let fixture = Fixture::new("");
+    let mut source = "// 👋\nfn main() { print(\"é".as_bytes().to_vec();
+    source.push(0xff);
+    fs::write(&fixture.source, source).unwrap();
+    let output = fixture.command("check");
+    assert_eq!(output.status.code(), Some(1));
+    let diagnostic = String::from_utf8(output.stderr).unwrap();
+    assert!(diagnostic.contains(":2:21: error:"), "{diagnostic}");
+    assert!(diagnostic.contains("UTF-8"), "{diagnostic}");
+}
+
+#[test]
+fn help_and_version_reject_extra_arguments_as_usage_errors() {
+    // Proves valid commands with extra arguments remain recognizable in diagnostics.
+    for command in ["help", "-h", "--help", "--version", "-V"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_chasm"))
+            .args([command, "extra"])
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(2));
+        let diagnostic = String::from_utf8(output.stderr).unwrap();
+        assert!(diagnostic.contains("takes no arguments"), "{diagnostic}");
+        assert!(!diagnostic.contains("unknown command"), "{diagnostic}");
+    }
+}
+
+#[test]
 fn building_cannot_destroy_the_input_program() {
     // Proves accidentally choosing the source as the output leaves the source intact.
     let source = "fn main() { print(42) }";
