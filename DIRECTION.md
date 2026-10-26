@@ -2,6 +2,8 @@
 
 Chasm is a readable, statically typed, data-oriented language for applications,
 with one core semantic model across interpreted, native, and JavaScript execution.
+Runtime scripting and plugins are core use cases: applications must be able to
+load and execute Chasm source through an embedded runtime.
 It separates data from behavior and makes borrowing and caller-visible mutation
 explicit. Native execution should reclaim memory through inferred regions and
 deterministic resource cleanup, without a tracing collector.
@@ -21,6 +23,13 @@ Borrowing, resources, regions, JavaScript, and self-hosting are unimplemented;
 memory feasibility and performance gates remain unperformed.
 
 ## Immediate priority
+
+Make the existing interpreter embeddable for runtime scripts and plugins before
+self-hosting. Hosts need to load and check source, register typed host functions,
+call Chasm functions, and receive values and diagnostics without terminating the
+host process. Runtime execution must work without an external C compiler.
+Interpretation is the initial execution strategy; a JIT is a later optimization
+subject to measured need and the same semantic conformance gates.
 
 Extend the working scalar core toward the bootstrap subset in thin slices.
 Resolve copying versus resource ownership, borrow validity during storage changes,
@@ -48,8 +57,9 @@ Per-call arenas do not yet establish bounded retention for long-lived state.
   Expensive promotion needs a defined, visible cost contract.
 - Backend parity covers observable arithmetic, mutation, errors, and cleanup.
   Host capabilities may differ explicitly.
-- Embedding, plugins, HMR, async, and parallel execution remain goals. Each needs
-  its own lifetime and conformance gates after the synchronous core works.
+- Embedding and plugin execution need explicit host capabilities, runtime-owned
+  state, and lifetime and conformance gates. HMR, async, and parallel execution
+  have separate gates.
 
 ## Self-hosting and verification
 

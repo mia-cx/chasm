@@ -86,13 +86,21 @@ AST
 Type checker
     ↓
 Typed IR
-    ├── Bytecode VM
+    ├── Interpreter (alpha)
+    ├── Bytecode VM (planned)
     ├── Native compiler
     ├── JavaScript compiler
     └── WebAssembly compiler (future)
 ```
 
-The bytecode VM supports scripting, the REPL, plugins, hot module replacement, and local development. Native compilation supports release binaries, servers, desktop applications, and command-line tools. JavaScript compilation supports browsers, Node.js, and worker runtimes without requiring WebAssembly.
+Runtime scripting and plugins are core requirements. An application should be
+able to load Chasm source, check it, and execute it through an embedded runtime
+without an external C compiler. The typed-IR interpreter is the initial path;
+a bytecode VM or JIT can improve execution speed later. Embedding comes before
+self-hosting. The alpha currently provides CLI interpretation through `chasm run`;
+it has no public embedding API or JIT.
+
+The runtime also supports the planned REPL, hot module replacement, and local development. Native compilation supports release binaries, servers, desktop applications, and command-line tools. JavaScript compilation supports browsers, Node.js, and worker runtimes without requiring WebAssembly.
 
 Every backend implements the same evaluation order, numeric behavior, value semantics, mutation rules, errors, and cleanup behavior. Host APIs and low-level capabilities may differ by target, but those differences must be explicit.
 

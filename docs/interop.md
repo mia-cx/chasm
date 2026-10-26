@@ -215,10 +215,17 @@ Untrusted Node.js code is not sandboxed merely because it is loaded as a plugin.
 
 ## Stable Embedding API
 
-The Chasm VM should eventually expose a stable C embedding API that allows a host to:
+Runtime scripting and plugins are core requirements. The initial embedding
+surface uses the typed-IR interpreter and precedes self-hosting. It must load and
+check source at runtime without an external C compiler, and return script errors
+and panics to the host without terminating it. A bytecode VM or JIT may later
+implement the same operations with the same semantics.
 
-- Create and destroy a VM
-- Load bytecode modules
+The runtime should expose a stable C embedding API, after its lifecycle is
+validated, that allows a host to:
+
+- Create and destroy a runtime context
+- Load and check source; load bytecode when a bytecode backend exists
 - Register host functions
 - Call Chasm exports
 - Exchange explicitly represented values
