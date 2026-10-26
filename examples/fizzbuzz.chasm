@@ -1,0 +1,30 @@
+// FizzBuzz from 1 to 15, then the greatest common divisor of two numbers.
+fn divides(divisor: Int, value: Int) -> Bool {
+    return value % divisor == 0
+}
+
+fn gcd(a: Int, b: Int) -> Int {
+    while b != 0 {
+        let rest = a % b
+        a = b
+        b = rest
+    }
+    return a
+}
+
+fn main() {
+    let i = 1
+    while i <= 15 {
+        if divides(3, i) and divides(5, i) {
+            print("FizzBuzz")
+        } else if divides(divisor: 3, value: i) {
+            print("Fizz")
+        } else if divides(5, value: i) {
+            print("Buzz")
+        } else {
+            print(i)
+        }
+        i = i + 1
+    }
+    print(gcd(1071, 462))
+}

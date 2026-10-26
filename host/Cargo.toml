@@ -1,0 +1,11 @@
+[package]
+name = "chasm"
+version = "0.1.0-alpha.1"
+edition = "2024"
+rust-version = "1.97"
+description = "Stage-zero Chasm compiler: interpreter and C backend for the scalar alpha"
+publish = false
+
+[[bin]]
+name = "chasm"
+path = "src/main.rs"
