@@ -8,19 +8,27 @@ deterministic resource cleanup, without a tracing collector.
 
 ## Current state
 
-The repository contains a language proposal and design research. No compiler,
-runtime, conformance results, or performance evidence exists yet.
-The [README](README.md) introduces the language; detailed notes live in `docs/`.
+The repository contains a Rust stage-zero scalar alpha (`0.1.0-alpha.1`), an
+interpreter over typed IR, and a C backend with native builds through GCC or
+Clang. Functions, mutable locals, branches, loops, recursion, checked Int32,
+booleans, and literal strings work in single-file programs. Independent CLI
+tests compare interpreter/native results and exercise diagnostics, evaluation
+order, arithmetic traps, build safety, and optimized/UBSan C output.
+
+The [alpha contract](docs/alpha.md) defines implemented behavior. The wider
+language proposal remains in the [README](README.md) and design notes.
+Borrowing, resources, regions, JavaScript, and self-hosting are unimplemented;
+memory feasibility and performance gates remain unperformed.
 
 ## Immediate priority
 
-Define a small, coherent synchronous core and make its semantics executable.
+Extend the working scalar core toward the bootstrap subset in thin slices.
 Resolve copying versus resource ownership, borrow validity during storage changes,
 region escapes, cleanup dependencies, and unambiguous call elaboration before
 expanding the language. Use conservative rejection where a rule is unresolved.
 
-The reconciled recommendation is Rust for stage zero, C emission for initial
-native execution, and an interpreter over typed IR as the semantic reference.
+Stage zero uses Rust, C emission for initial native execution, and an interpreter
+over typed IR as the semantic reference.
 Rust's checked borrowing supports the indexed compiler design; a cheap port to
 Chasm remains a hypothesis. Trial one parser/lowering pass before broad host
 investment. Stable F# is the fallback if Rust needs excessive scaffolding.
@@ -52,8 +60,9 @@ and JavaScript emitter. Preserve a rebuildable stage zero and compare later
 stages under a pinned toolchain. Bootstrap equality establishes a fixed point
 for those inputs; it does not establish compiler correctness.
 
-The [compiler plan](docs/compiler-plan.md) defines the milestones. Its proposed
-subset rules remain subject to language design review; no gate has run yet.
+The [compiler plan](docs/compiler-plan.md) defines the milestones. Its additional
+subset rules remain subject to language design review. The scalar alpha has
+conformance evidence; ownership, memory, and self-hosting gates have not run.
 
 Bend informs the separation of copyable data and affine resources, explicit
 effects, and independently checked contracts. Formal proofs are a later,

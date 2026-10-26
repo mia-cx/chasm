@@ -1,8 +1,35 @@
-# Chasm language proposal
+# Chasm
 
-> Status: draft
+> Status: `0.1.0-alpha.1` — a scalar compiler alpha alongside the language proposal.
 
 Chasm is a statically typed, data-oriented programming language with one semantic model across interpreted and compiled execution.
+
+## Try the alpha
+
+Install [Rust](https://rustup.rs/) and GCC or Clang. The repository pins the
+Rust toolchain; native builds use `cc`, or the program named by `CC`.
+
+```sh
+cargo run -- run examples/hello.chasm
+cargo run -- check examples/factorial.chasm
+cargo run -- build examples/factorial.chasm -o factorial
+./factorial
+```
+
+The alpha checks, interprets, emits C, and builds native executables from a
+single source file. It supports typed functions, mutable locals, `if`/`else`,
+`while`, recursion, named arguments, checked 32-bit integers, booleans, and
+string literals. See the [alpha contract](docs/alpha.md) for the implemented
+syntax, commands, and limits, and [examples/](examples/) for runnable programs.
+
+```sh
+cargo test --workspace
+```
+
+Borrowing, regions, resources, modules, JavaScript, and self-hosting remain
+future work. The sections below describe the broader language proposal.
+
+## Language proposal
 
 Its syntax makes structural relationships visible. `::` traverses namespaces, `#` looks up callables, and `.` accesses runtime data. Values are independent by default. Borrowing and caller-visible mutation are explicit. Compiler-inferred memory regions provide predictable reclamation without requiring a tracing garbage collector.
 
@@ -10,8 +37,8 @@ This proposal is the entry point for the language. The detailed design notes in 
 
 ## Implementation research
 
-No compiler or runtime exists yet. These proposals turn the language direction
-into a buildable subset; their new language rules remain recommendations.
+The alpha implements an initial scalar slice. These proposals define the work
+toward the bootstrap subset; their additional language rules remain recommendations.
 
 - [Compiler plan](docs/compiler-plan.md): bootstrap host, execution backends, milestones, and self-hosting.
 - [Bootstrap language](docs/bootstrap-language.md): proposed subset and semantic acceptance cases.
