@@ -9,7 +9,7 @@ pub struct Span {
 }
 
 /// One compile error, rendered as `PATH:LINE:COLUMN: error: MESSAGE`.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Diagnostic {
     pub span: Span,
     pub message: String,
@@ -24,8 +24,16 @@ impl Diagnostic {
     }
 
     pub fn render(&self, path: &str) -> String {
-        format!(
-            "{path}:{}:{}: error: {}",
+        format!("{path}:{self}")
+    }
+}
+
+/// `LINE:COLUMN: error: MESSAGE`, for source without a path.
+impl std::fmt::Display for Diagnostic {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:{}: error: {}",
             self.span.line, self.span.col, self.message
         )
     }

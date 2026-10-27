@@ -5,9 +5,13 @@
 //! that is sound only because no expression can assign a variable, so nothing
 //! evaluated in between can change it.
 
+use std::rc::Rc;
+
 use crate::ast::{self, Arg, Expr, ExprKind, FnDecl, TypeName};
 use crate::diag::{Diagnostic, Span};
-use crate::ir::{BinOp, FuncId, Function, Local, LocalId, Operand, Program, Rvalue, Stmt, Ty};
+use crate::ir::{
+    BinOp, Callee, Function, HostSig, Local, LocalId, Operand, Program, Rvalue, Stmt, Ty,
+};
 
 type LResult<T> = Result<T, Diagnostic>;
 
@@ -17,13 +21,21 @@ struct Sig {
     ret: Option<Ty>,
 }
 
-/// Checks the program and lowers it. Reports every signature error, or else
-/// the first error in each function body.
-pub fn lower(decls: &[FnDecl]) -> Result<Program, Vec<Diagnostic>> {
+/// Checks the source and lowers it. `hosts` are the host functions it may
+/// call. A program needs `fn main()`; a library (`require_main` false) is a
+/// set of functions for an embedding application to call by name.
+///
+/// Reports every signature error, or else the first error in each function
+/// body.
+pub fn lower(
+    decls: &[FnDecl],
+    hosts: &[HostSig],
+    require_main: bool,
+) -> Result<Program, Vec<Diagnostic>> {
     let mut errors = Vec::new();
     let mut sigs = Vec::new();
     for (index, decl) in decls.iter().enumerate() {
-        match signature(decl, &decls[..index]) {
+        match signature(decl, &decls[..index], hosts) {
             Ok(sig) => sigs.push(sig),
             Err(error) => errors.push(error),
         }
@@ -33,6 +45,8 @@ pub fn lower(decls: &[FnDecl]) -> Result<Program, Vec<Diagnostic>> {
     }
 
     let main = match sigs.iter().position(|s| s.name == "main") {
+        // A library has no entry point, so `main` is an ordinary name there.
+        _ if !require_main => None,
         None => {
             let start = Span { line: 1, col: 1 };
             return Err(vec![Diagnostic::new(
@@ -44,13 +58,25 @@ pub fn lower(decls: &[FnDecl]) -> Result<Program, Vec<Diagnostic>> {
             let message = "`main` must take no parameters and return no value";
             return Err(vec![Diagnostic::new(decls[main].span, message)]);
         }
-        Some(main) => main,
+        Some(main) => Some(main),
     };
 
+    // Host parameters have no names, so calls fill them by position.
+    let host_sigs: Vec<Sig> = hosts
+        .iter()
+        .map(|host| Sig {
+            name: host.name.clone(),
+            params: (1..)
+                .zip(&host.params)
+                .map(|(position, ty)| (format!("#{position}"), *ty))
+                .collect(),
+            ret: host.ret,
+        })
+        .collect();
     let mut strings = Vec::new();
     let mut functions = Vec::new();
     for (decl, sig) in decls.iter().zip(&sigs) {
-        match lower_function(decl, sig, &sigs, &mut strings) {
+        match lower_function(decl, sig, &sigs, &host_sigs, &mut strings) {
             Ok(function) => functions.push(function),
             Err(error) => errors.push(error),
         }
@@ -60,14 +86,19 @@ pub fn lower(decls: &[FnDecl]) -> Result<Program, Vec<Diagnostic>> {
     }
     Ok(Program {
         functions,
+        hosts: hosts.to_vec(),
         strings,
         main,
     })
 }
 
-fn signature(decl: &FnDecl, earlier: &[FnDecl]) -> LResult<Sig> {
+fn signature(decl: &FnDecl, earlier: &[FnDecl], hosts: &[HostSig]) -> LResult<Sig> {
     if decl.name == "print" {
         let message = "`print` is a prelude function and cannot be redefined";
+        return Err(Diagnostic::new(decl.span, message));
+    }
+    if hosts.iter().any(|host| host.name == decl.name) {
+        let message = format!("`{}` is a host function and cannot be redefined", decl.name);
         return Err(Diagnostic::new(decl.span, message));
     }
     if let Some(first) = earlier.iter().find(|d| d.name == decl.name) {
@@ -109,11 +140,13 @@ fn lower_function(
     decl: &FnDecl,
     sig: &Sig,
     sigs: &[Sig],
-    strings: &mut Vec<String>,
+    hosts: &[Sig],
+    strings: &mut Vec<Rc<str>>,
 ) -> LResult<Function> {
     let mut lower = FnLower {
         sig,
         sigs,
+        hosts,
         strings,
         locals: Vec::new(),
         scopes: vec![Vec::new()],
@@ -158,13 +191,14 @@ fn always_returns(stmts: &[ast::Stmt]) -> bool {
 struct FnLower<'a> {
     sig: &'a Sig,
     sigs: &'a [Sig],
-    strings: &'a mut Vec<String>,
+    hosts: &'a [Sig],
+    strings: &'a mut Vec<Rc<str>>,
     locals: Vec<Local>,
     /// Visible variables, innermost block last.
     scopes: Vec<Vec<(String, LocalId)>>,
 }
 
-impl FnLower<'_> {
+impl<'a> FnLower<'a> {
     fn block(&mut self, stmts: &[ast::Stmt]) -> LResult<Vec<Stmt>> {
         self.scopes.push(Vec::new());
         let mut out = Vec::new();
@@ -312,9 +346,9 @@ impl FnLower<'_> {
             out.push(Stmt::Print(value));
             return Ok(());
         }
-        let func = self.function(callee, span)?;
-        let args = self.arguments(func, args, span, out)?;
-        out.push(Stmt::Call { func, args, span });
+        let callee = self.function(callee, span)?;
+        let args = self.arguments(callee, args, span, out)?;
+        out.push(Stmt::Call { callee, args, span });
         Ok(())
     }
 
@@ -337,25 +371,33 @@ impl FnLower<'_> {
         Ok(self.operand(&arg.value, out)?.0)
     }
 
-    fn function(&self, name: &str, span: Span) -> LResult<FuncId> {
-        self.sigs
-            .iter()
-            .position(|s| s.name == name)
+    /// Program functions and host functions share one namespace; `signature`
+    /// rejects a program function that reuses a host function's name.
+    fn function(&self, name: &str, span: Span) -> LResult<Callee> {
+        let position = |sigs: &[Sig]| sigs.iter().position(|s| s.name == name);
+        position(self.sigs)
+            .map(Callee::Fn)
+            .or_else(|| position(self.hosts).map(Callee::Host))
             .ok_or_else(|| Diagnostic::new(span, format!("unknown function `{name}`")))
+    }
+
+    fn sig(&self, callee: Callee) -> &'a Sig {
+        match callee {
+            Callee::Fn(id) => &self.sigs[id],
+            Callee::Host(id) => &self.hosts[id],
+        }
     }
 
     /// Evaluates arguments in the order written and returns them in
     /// parameter order.
     fn arguments(
         &mut self,
-        func: FuncId,
+        callee: Callee,
         args: &[Arg],
         span: Span,
         out: &mut Vec<Stmt>,
     ) -> LResult<Vec<Operand>> {
-        // Copy the slice reference so `sig` does not borrow `self`.
-        let sigs = self.sigs;
-        let sig = &sigs[func];
+        let sig = self.sig(callee);
         let mut slots: Vec<Option<Operand>> = vec![None; sig.params.len()];
         for (position, arg) in args.iter().enumerate() {
             let index = match &arg.name {
@@ -423,7 +465,7 @@ impl FnLower<'_> {
             ExprKind::Int(n) => (Rvalue::Use(Operand::Int(*n)), Ty::Int),
             ExprKind::Bool(b) => (Rvalue::Use(Operand::Bool(*b)), Ty::Bool),
             ExprKind::Str(text) => {
-                self.strings.push(text.clone());
+                self.strings.push(text.as_str().into());
                 (
                     Rvalue::Use(Operand::Str(self.strings.len() - 1)),
                     Ty::String,
@@ -454,14 +496,15 @@ impl FnLower<'_> {
                         "`print` returns no value, so its result cannot be used",
                     ));
                 }
-                let func = self.function(callee, span)?;
-                let args = self.arguments(func, args, span, out)?;
-                let Some(ty) = self.sigs[func].ret else {
+                let name = callee;
+                let callee = self.function(name, span)?;
+                let args = self.arguments(callee, args, span, out)?;
+                let Some(ty) = self.sig(callee).ret else {
                     let message =
-                        format!("`{callee}` returns no value, so its result cannot be used");
+                        format!("`{name}` returns no value, so its result cannot be used");
                     return Err(Diagnostic::new(span, message));
                 };
-                (Rvalue::Call { func, args, span }, ty)
+                (Rvalue::Call { callee, args, span }, ty)
             }
         })
     }

@@ -1,17 +1,6 @@
 //! `chasm`: the stage-zero Chasm compiler for the scalar alpha.
 //! `docs/alpha.md` specifies the commands and language it accepts.
 
-mod ast;
-mod diag;
-mod emit_c;
-mod interp;
-mod ir;
-mod lexer;
-mod lower;
-mod native;
-mod parser;
-mod validate;
-
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, BufWriter, Write};
@@ -19,7 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::thread;
 
-use interp::Trap;
+use chasm::interp::{self, Trap};
+use chasm::{CompileError, diag, emit_c, ir, native};
 
 const USAGE: &str = "\
 Usage:
@@ -41,7 +31,8 @@ const USAGE_ERROR: u8 = 2;
 const INTERNAL_ERROR: u8 = 70;
 const PANIC_STATUS: u8 = 101;
 
-/// Room for the interpreter's recursion at the call depth limit.
+/// Generous room for the recursive compile passes, which the 200-level
+/// nesting limit bounds. The interpreter keeps Chasm calls on the heap.
 const STACK_BYTES: usize = 512 << 20;
 
 enum Cli {
@@ -209,13 +200,13 @@ fn compile(path: &Path) -> Result<ir::Program, ExitCode> {
             "source is not valid UTF-8 text",
         )])
     })?;
-    let decls = parser::parse(lexer::lex(&source)).map_err(|d| report(&[d]))?;
-    let program = lower::lower(&decls).map_err(|d| report(&d))?;
-    if let Err(error) = validate::validate(&program) {
-        eprintln!("chasm: internal compiler error: invalid IR {error}");
-        return Err(ExitCode::from(INTERNAL_ERROR));
-    }
-    Ok(program)
+    chasm::compile(&source, &[], true).map_err(|error| match error {
+        CompileError::Source(diagnostics) => report(&diagnostics),
+        CompileError::Internal(_) => {
+            eprintln!("chasm: {error}");
+            ExitCode::from(INTERNAL_ERROR)
+        }
+    })
 }
 
 fn run(program: &ir::Program, path: &Path) -> ExitCode {
@@ -235,6 +226,9 @@ fn run(program: &ir::Program, path: &Path) -> ExitCode {
         }
         (Err(Trap::Output(error)), _) | (Ok(()), Err(error)) => {
             fail(&format!("cannot write output: {error}"))
+        }
+        (Err(Trap::OutOfFuel | Trap::Host { .. }), _) => {
+            unreachable!("the CLI runs with unlimited fuel and no host functions")
         }
         (Ok(()), Ok(())) => ExitCode::SUCCESS,
     }

@@ -4,9 +4,12 @@
 //! result in a variable. A backend executes statements in order and evaluates
 //! nothing implicitly, so source evaluation order survives unchanged.
 
+use std::rc::Rc;
+
 use crate::diag::Span;
 
 pub type FuncId = usize;
+pub type HostId = usize;
 pub type LocalId = usize;
 pub type StrId = usize;
 
@@ -29,9 +32,22 @@ impl Ty {
 
 pub struct Program {
     pub functions: Vec<Function>,
-    /// String literal contents, indexed by `StrId`.
-    pub strings: Vec<String>,
-    pub main: FuncId,
+    /// Host functions the program was checked against, indexed by `HostId`.
+    pub hosts: Vec<HostSig>,
+    /// String literal contents, indexed by `StrId`. Shared so a running
+    /// program can hand a literal around without copying it.
+    pub strings: Vec<Rc<str>>,
+    /// `fn main()`, when compiled as a program rather than a library.
+    pub main: Option<FuncId>,
+}
+
+/// The signature of a function the embedding application provides.
+#[derive(Clone)]
+pub struct HostSig {
+    pub name: String,
+    pub params: Vec<Ty>,
+    /// `None` for functions that return no value.
+    pub ret: Option<Ty>,
 }
 
 pub struct Function {
@@ -48,6 +64,14 @@ pub struct Local {
     /// Source name, or a description for compiler temporaries.
     pub name: String,
     pub ty: Ty,
+}
+
+/// The function a call runs: one defined in the program, or one the host
+/// registered.
+#[derive(Clone, Copy, Debug)]
+pub enum Callee {
+    Fn(FuncId),
+    Host(HostId),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -72,7 +96,7 @@ pub enum Rvalue {
     },
     Not(Operand),
     Call {
-        func: FuncId,
+        callee: Callee,
         args: Vec<Operand>,
         span: Span,
     },
@@ -85,7 +109,7 @@ pub enum Stmt {
     },
     /// A call whose result, if any, is discarded.
     Call {
-        func: FuncId,
+        callee: Callee,
         args: Vec<Operand>,
         span: Span,
     },
