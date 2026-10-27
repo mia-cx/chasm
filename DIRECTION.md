@@ -8,6 +8,10 @@ It separates data from behavior and makes borrowing and caller-visible mutation
 explicit. Native execution should reclaim memory through inferred regions and
 deterministic resource cleanup, without a tracing collector.
 
+Agents are the primary authors and readers. Human readability and unambiguous
+semantics remain requirements. Measure efficiency as tokens per correct change,
+including context, diagnostics, and repairs. Character count alone is insufficient.
+
 ## Current state
 
 The repository contains a Rust stage-zero scalar alpha (`0.1.0-alpha.1`), an
@@ -49,6 +53,10 @@ Per-call arenas do not yet establish bounded retention for long-lived state.
 
 ## Design constraints
 
+- File-local imports bind the final module-path component; `as` provides an
+  explicit alias. Imports resolve at compile time and preserve module identity.
+- The caller grants mutable access; the callee's parameter type requires it.
+  A read-only borrow cannot become mutable inside the callee.
 - Ordinary copyable data has independent value semantics. Resource ownership
   requires a separate, nonduplicable contract, including nested resources.
 - Region lifetime is only one condition for safe borrowing. Moves, replacement,
@@ -83,3 +91,7 @@ scoped extension; tests do not establish universal laws.
 Mia is exploring a test-driven language: module behavior contracts expressed
 before implementation. [Behavior contracts](docs/behavior-contracts.md) records
 the proposal and open enforcement questions; it is not yet adopted semantics.
+
+[Agent authoring](docs/agent-authoring.md) records token-efficiency candidates,
+formatting measurements, and an illustrative HTTP server. Argument shorthand
+remains proposed; the scalar alpha does not implement imports or borrows.

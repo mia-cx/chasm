@@ -52,6 +52,7 @@ toward the bootstrap subset; their additional language rules remain recommendati
 
 Chasm should be:
 
+- Designed primarily for agents to write and read, while remaining readable to people
 - Easy to read at a glance
 - Statically typed
 - Data-oriented
@@ -69,6 +70,11 @@ Chasm intentionally avoids:
 - Macro-heavy language design
 - Different core semantics between development and release builds
 - Routine allocator plumbing in application code
+
+Token efficiency means tokens per correct change, including context, diagnostics,
+and repair attempts. Short syntax must preserve unambiguous calls, ownership,
+and mutation. [Agent authoring](docs/agent-authoring.md) records the candidates
+and an illustrative HTTP server. No token savings have been measured yet.
 
 ## One language, multiple backends
 
@@ -172,6 +178,16 @@ src/
 
 Ordinary source files need no module declaration. A file may declare nested namespaces without creating another top-level module.
 
+Imports bind the final path component as a file-local module name. `as` supplies an explicit alias:
+
+```chasm
+import std::net::http
+import vendor::net::http as http2
+```
+
+Use `http#listen(...)` for a callable and `http::Request` for a type.
+Imports resolve at compile time. Naming conflicts require an explicit alias.
+
 A directory may provide a curated public API through `module.chasm`:
 
 ```text
@@ -243,6 +259,15 @@ image#resize(
 Once a named argument appears, every remaining argument must be named. A positional argument after a named argument is invalid.
 
 The retained conversation summary recorded a stricter rule where a call must be entirely positional or entirely named. The canonical notes take precedence, so the positional-prefix form above is the current proposal.
+
+Named-argument shorthand is proposed as `name:` for `name: name`:
+
+```chasm
+http#respond(request, response:)
+```
+
+A bare argument stays positional. Mutable borrowing still requires an explicit
+`&mut` expression. See [same-name shorthand](docs/parameter-passing.md#same-name-shorthand).
 
 ## Structural parameter projection
 
@@ -322,6 +347,12 @@ fn normalize(config: &mut Config) {
 normalize(&mut config)
 ```
 
+The caller grants mutable access; the function's parameter type requires it.
+A callee cannot upgrade `&T` to `&mut T`. Passing `&mut` onward temporarily
+reborrows existing access. Owned local values remain locally mutable.
+The planned built-in lint warns when `&mut T` only needs read access.
+See [permission and reborrowing](docs/parameter-passing.md#permission-and-reborrowing).
+
 Chasm distinguishes safe language values and borrows from raw pointers:
 
 ```text
@@ -399,6 +430,7 @@ This fragment validates the structural syntax and call forms used in this propos
 
 ```ebnf
 namespace_path = identifier, { "::", identifier } ;
+import_decl = "import", namespace_path, [ "as", identifier ] ;
 callable_lookup = namespace_path, "#", identifier ;
 named_callable = identifier | callable_lookup ;
 data_access = expression, ".", identifier ;
@@ -408,7 +440,7 @@ arguments = positional_arguments, [ ",", named_arguments ]
           | named_arguments ;
 positional_arguments = expression, { ",", expression } ;
 named_arguments = named_argument, { ",", named_argument } ;
-named_argument = identifier, ":", expression ;
+named_argument = identifier, ":", [ expression ] ; (* omitted value is proposed same-name shorthand *)
 
 read_borrow = "&", expression ;
 mutable_borrow = "&mut", expression ;
@@ -435,7 +467,7 @@ The language direction is established. These areas still need precise specificat
 3. Borrow aliasing, lifetime inference, ownership graphs, cycles, and promotion costs.
 4. Errors, panics, stack traces, and propagation.
 5. Async execution, cancellation, concurrency, and thread safety.
-6. Imports, package boundaries, initialization, and `.chsm` behavior.
+6. Package boundaries, initialization, and `.chsm` behavior.
 7. Native ABI, bytecode format, VM instruction set, and compile-time evaluation.
 8. Reflection, attributes, package management, formatting, testing, documentation, and debugging.
 9. Validation of the proposed Rust bootstrap and staged port to a self-hosted Chasm compiler.
@@ -447,6 +479,7 @@ Every decision should preserve the central promise: Chasm code makes structure, 
 - [Language design](docs/language-design.md)
 - [Parameter passing and structural projection](docs/parameter-passing.md)
 - [Modules](docs/modules.md)
+- [Agent authoring and HTTP example](docs/agent-authoring.md)
 - [Regional memory management](docs/memory-management.md)
 - [JavaScript backend](docs/javascript-backend.md)
 - [Interoperability](docs/interop.md)

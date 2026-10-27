@@ -48,6 +48,23 @@ std::fs#readFile("notes.txt")
 
 Parameter names are part of a function's public API. Renaming a public parameter is therefore a breaking change.
 
+### Same-name shorthand
+
+**Proposal.** A named argument may omit its value when a visible variable has the same name:
+
+```chasm
+http#respond(request, response:)
+```
+
+This expands to `http#respond(request, response: response)`. The same rule applies
+to named fields in constructor calls. A shorthand argument ends at `,` or `)`.
+An unresolved name is an error. Ordinary name resolution, type checking, and
+left-to-right evaluation still apply.
+
+A bare argument remains positional. Shorthand does not insert a borrow;
+`config:` passes `config` by value. A mutable borrow still needs
+`config: &mut config`. The scalar alpha does not implement this shorthand.
+
 ## Positional Arguments
 
 Positional arguments remain supported where their meaning is clear:
@@ -182,9 +199,39 @@ normalize(&mut config)
 
 This syntax communicates that:
 
-- The function mutates caller-owned data.
+- The function may mutate caller-owned data.
 - The function operates directly on the borrowed value.
 - No independent local value exists for that parameter.
+
+### Permission and reborrowing
+
+The caller grants access; the callee's parameter type declares what access it requires.
+Access is part of the type:
+
+- `T` gives the callee an owned local value. Ordinary copyable data remains independent of the caller's value.
+- `&T` permits reading the caller's value.
+- `&mut T` permits mutating the caller's value, subject to exclusivity and lifetime rules.
+
+Local values and by-value parameters are mutable without a separate `mut` declaration.
+Resources follow the proposed move-only ownership rules when passed by value.
+A read-only borrow cannot be upgraded to a mutable borrow, even for one call.
+The compiler rejects passing `&T` to a parameter requiring `&mut T`.
+
+A borrowed parameter names the borrowed place. Passing `&mut parameter` onward
+temporarily reborrows that same place; it does not create a reference to a reference.
+The reborrow can forward only access already granted by the caller.
+An owned local value can also be borrowed mutably for a call.
+How many calls need mutation does not change the required parameter type.
+See the [bootstrap borrow rules](bootstrap-language.md#borrows-and-exclusivity) for access duration and exclusivity.
+
+### Unnecessary mutable borrow lint
+
+Built-in linting should suggest `&T` when an `&mut T` parameter only needs read access.
+Direct writes, writes to fields or elements, and forwarding a mutable borrow count as mutable uses.
+The callee's signature determines whether a forwarded borrow needs mutable access;
+performing I/O alone does not imply that requirement.
+Changing an independent local copy does not count as mutating the borrowed value.
+This lint awaits borrow support in the compiler.
 
 ## Parameter and Pointer Forms
 
