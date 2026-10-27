@@ -57,6 +57,8 @@ Per-call arenas do not yet establish bounded retention for long-lived state.
   Expensive promotion needs a defined, visible cost contract.
 - Backend parity covers observable arithmetic, mutation, errors, and cleanup.
   Host capabilities may differ explicitly.
+- Built-in linting should warn when an `&mut` parameter only needs read access.
+  Writing through it or forwarding a mutable borrow counts as mutable use.
 - Embedding and plugin execution need explicit host capabilities, runtime-owned
   state, and lifetime and conformance gates. HMR, async, and parallel execution
   have separate gates.

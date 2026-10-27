@@ -197,6 +197,14 @@ The compiler needs no projection, so the gate is self-hosting plus the audit's p
 - The checker reports every error in a module. The parser stops at the first syntax error in a file, and recovery comes later.
 - The host and the Chasm compiler must produce identical diagnostics on the corpus.
 
+**Planned built-in lint: unnecessary mutable borrow.** Warn when a function's
+`&mut T` parameter is used only for reading and suggest `&T`. Writes through the
+borrow, including fields and elements, and forwarding it as an `&mut` argument
+count as mutable uses. A callee's signature grants permission to mutate; the lint
+does not need to prove that the callee performs a write. Mutating an independent
+local copy does not count as using the original borrow mutably. This lint waits
+for borrow support; it is not implemented in the scalar alpha.
+
 ## Runtime ABI
 
 **Recommended. Private and unstable.**
