@@ -20,6 +20,7 @@ Chasm is guided by five principles:
 
 Chasm aims to be:
 
+- Written and read primarily by agents, while remaining readable to people
 - Easy to read and maintain
 - Statically typed
 - Data-oriented
@@ -180,6 +181,10 @@ This allows consumers to use `net#request(...)` and `net::Client` without exposi
 
 See [Modules](modules.md) for the detailed design notes.
 
+Imports such as `import std::net::http` bind `http` throughout the file.
+An `as` clause supplies an explicit alias for conflicts. These are compile-time
+module bindings; the [import rules](modules.md#imports) define their scope and resolution.
+
 ## Structs
 
 Structs are plain data.
@@ -314,6 +319,10 @@ image#resize(
 ### Named Parameters as API
 
 Parameter names are part of a function's public API. Renaming a public parameter from `timeout` to `duration`, for example, is a breaking change.
+
+The proposed [same-name shorthand](parameter-passing.md#same-name-shorthand)
+lets `name:` expand to `name: name`, including named fields in constructor calls.
+Borrowing stays explicit; the shorthand never inserts `&` or `&mut`.
 
 ### One Conceptual Argument
 
@@ -463,11 +472,20 @@ normalize(&mut config)
 
 Mutation should always be visible: `process(config)` does not mutate the caller's value, while `process(&mut config)` may do so.
 
+The caller grants access, and the parameter type declares the callee's requirement.
+A callee cannot upgrade `&T` to `&mut T`. Reborrowing forwards existing permission.
+The [permission and lint rules](parameter-passing.md#permission-and-reborrowing)
+distinguish local mutation from access to caller-owned data.
+
 See [Parameter Passing and Structural Projection](parameter-passing.md) for the detailed design notes.
 
 ## Readability
 
 Chasm optimizes for code that explains itself.
+
+Measure agent efficiency as tokens per correct change, including context, diagnostics, and repair attempts.
+Preserve explicit function contracts and infer local types where unambiguous.
+The [agent-authoring note](agent-authoring.md) describes token-efficiency candidates and formatting measurements.
 
 Prefer:
 

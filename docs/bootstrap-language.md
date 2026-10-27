@@ -71,6 +71,7 @@ An item leaves the right column only with three things: a written rule, proof ca
 - `match` bindings borrow parts of the matched place. They are read-only unless the code says `match &mut place`.
 - No variable, field, or container can hold a borrow, and no function returns one. So no borrow outlives its call or block, and no lifetime syntax exists. The [mutable value semantics paper](https://www.jot.fm/issues/issue_2022_02/article2.pdf) listed by the Hylo project calls this the strictest form, where references "are only created implicitly, at function boundaries, and cannot be stored in variables or object fields."
 - A borrow binding names the borrowed place. Reading it copies the value, and assigning through a `&mut` binding writes the place. Passing it on needs `&` or `&mut` again, so every caller-visible mutation shows `&mut` at the call.
+- The caller grants access; the callee requires it through the parameter type. A callee cannot upgrade `&T` to `&mut T`. Forwarding a mutable borrow requires existing mutable access, or an owned local value. See [permission and reborrowing](parameter-passing.md#permission-and-reborrowing).
 
 **Recommended: exclusivity.** Two accesses to one place may overlap only when both read. This is Swift's [Law of Exclusivity](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0176-enforce-exclusive-access-to-memory.md), checked statically here:
 
@@ -179,7 +180,7 @@ The compiler needs no projection, so the gate is self-hosting plus the audit's p
 **Recommended.**
 
 - A file is a module and a directory is a namespace, as in [Modules](modules.md). The package root is the directory given to `chasm`.
-- Paths are absolute from the package root, such as `net::http#request`. `std` is reserved. The subset has no `import`, and every top-level declaration is visible across the package.
+- Paths are absolute from the package root, such as `net::http#request`. `std` is reserved. The initial subset uses full paths, and every top-level declaration is visible across the package. The wider proposal defines [file-local imports and aliases](modules.md#imports); their implementation follows the initial subset.
 - Unqualified names resolve to locals, then the current module, then the prelude: `print`, `Some`, `None`, `Ok`, `Err`.
 - Variants are qualified, as in `Encoding::Utf8`. The bare `Utf8` shorthand in the existing notes is **Gated**, since it needs expected-type lookup.
 - Module-level `let` holds literal constants only. No module runs initialization code, so module cycles are harmless and initialization order never arises.
@@ -196,6 +197,13 @@ The compiler needs no projection, so the gate is self-hosting plus the audit's p
 - Three verdicts stay distinct: the program is wrong, the input is not supported yet, and the compiler failed. Unsupported input fails closed, as in [Bend lessons](bend-lessons.md).
 - The checker reports every error in a module. The parser stops at the first syntax error in a file, and recovery comes later.
 - The host and the Chasm compiler must produce identical diagnostics on the corpus.
+
+**Planned built-in lint: unnecessary mutable borrow.** Follow the
+[parameter lint rules](parameter-passing.md#unnecessary-mutable-borrow-lint).
+Suggest `&T` when an `&mut T` parameter only needs read access.
+Writes through the borrow and forwarding it as `&mut` count as mutable uses.
+The caller must grant that access. The lint waits for borrow support and is not
+implemented in the scalar alpha.
 
 ## Runtime ABI
 

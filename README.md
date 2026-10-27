@@ -1,8 +1,35 @@
-# Chasm language proposal
+# Chasm
 
-> Status: draft
+> Status: `0.1.0-alpha.1` — a scalar compiler alpha alongside the language proposal.
 
 Chasm is a statically typed, data-oriented programming language with one semantic model across interpreted and compiled execution.
+
+## Try the alpha
+
+Install [Rust](https://rustup.rs/) and GCC or Clang. The repository pins the
+Rust toolchain; native builds use `cc`, or the program named by `CC`.
+
+```sh
+cargo run -- run examples/hello.chasm
+cargo run -- check examples/factorial.chasm
+cargo run -- build examples/factorial.chasm -o factorial
+./factorial
+```
+
+The alpha checks, interprets, emits C, and builds native executables from a
+single source file. It supports typed functions, mutable locals, `if`/`else`,
+`while`, recursion, named arguments, checked 32-bit integers, booleans, and
+string literals. See the [alpha contract](docs/alpha.md) for the implemented
+syntax, commands, and limits, and [examples/](examples/) for runnable programs.
+
+```sh
+cargo test --workspace
+```
+
+Borrowing, regions, resources, modules, JavaScript, and self-hosting remain
+future work. The sections below describe the broader language proposal.
+
+## Language proposal
 
 Its syntax makes structural relationships visible. `::` traverses namespaces, `#` looks up callables, and `.` accesses runtime data. Values are independent by default. Borrowing and caller-visible mutation are explicit. Compiler-inferred memory regions provide predictable reclamation without requiring a tracing garbage collector.
 
@@ -10,8 +37,8 @@ This proposal is the entry point for the language. The detailed design notes in 
 
 ## Implementation research
 
-No compiler or runtime exists yet. These proposals turn the language direction
-into a buildable subset; their new language rules remain recommendations.
+The alpha implements an initial scalar slice. These proposals define the work
+toward the bootstrap subset; their additional language rules remain recommendations.
 
 - [Compiler plan](docs/compiler-plan.md): bootstrap host, execution backends, milestones, and self-hosting.
 - [Bootstrap language](docs/bootstrap-language.md): proposed subset and semantic acceptance cases.
@@ -25,6 +52,7 @@ into a buildable subset; their new language rules remain recommendations.
 
 Chasm should be:
 
+- Designed primarily for agents to write and read, while remaining readable to people
 - Easy to read at a glance
 - Statically typed
 - Data-oriented
@@ -43,6 +71,11 @@ Chasm intentionally avoids:
 - Different core semantics between development and release builds
 - Routine allocator plumbing in application code
 
+Token efficiency means tokens per correct change, including context, diagnostics,
+and repair attempts. Short syntax must preserve unambiguous calls, ownership,
+and mutation. [Agent authoring](docs/agent-authoring.md) records the candidates
+and an illustrative HTTP server. No token savings have been measured yet.
+
 ## One language, multiple backends
 
 Chasm source is lowered into a shared typed intermediate representation:
@@ -59,13 +92,21 @@ AST
 Type checker
     ↓
 Typed IR
-    ├── Bytecode VM
+    ├── Interpreter (alpha)
+    ├── Bytecode VM (planned)
     ├── Native compiler
     ├── JavaScript compiler
     └── WebAssembly compiler (future)
 ```
 
-The bytecode VM supports scripting, the REPL, plugins, hot module replacement, and local development. Native compilation supports release binaries, servers, desktop applications, and command-line tools. JavaScript compilation supports browsers, Node.js, and worker runtimes without requiring WebAssembly.
+Runtime scripting and plugins are core requirements. An application should be
+able to load Chasm source, check it, and execute it through an embedded runtime
+without an external C compiler. The typed-IR interpreter is the initial path;
+a bytecode VM or JIT can improve execution speed later. Embedding comes before
+self-hosting. The alpha currently provides CLI interpretation through `chasm run`;
+it has no public embedding API or JIT.
+
+The runtime also supports the planned REPL, hot module replacement, and local development. Native compilation supports release binaries, servers, desktop applications, and command-line tools. JavaScript compilation supports browsers, Node.js, and worker runtimes without requiring WebAssembly.
 
 Every backend implements the same evaluation order, numeric behavior, value semantics, mutation rules, errors, and cleanup behavior. Host APIs and low-level capabilities may differ by target, but those differences must be explicit.
 
@@ -136,6 +177,16 @@ src/
 ```
 
 Ordinary source files need no module declaration. A file may declare nested namespaces without creating another top-level module.
+
+Imports bind the final path component as a file-local module name. `as` supplies an explicit alias:
+
+```chasm
+import std::net::http
+import vendor::net::http as http2
+```
+
+Use `http#listen(...)` for a callable and `http::Request` for a type.
+Imports resolve at compile time. Naming conflicts require an explicit alias.
 
 A directory may provide a curated public API through `module.chasm`:
 
@@ -208,6 +259,15 @@ image#resize(
 Once a named argument appears, every remaining argument must be named. A positional argument after a named argument is invalid.
 
 The retained conversation summary recorded a stricter rule where a call must be entirely positional or entirely named. The canonical notes take precedence, so the positional-prefix form above is the current proposal.
+
+Named-argument shorthand is proposed as `name:` for `name: name`:
+
+```chasm
+http#respond(request, response:)
+```
+
+A bare argument stays positional. Mutable borrowing still requires an explicit
+`&mut` expression. See [same-name shorthand](docs/parameter-passing.md#same-name-shorthand).
 
 ## Structural parameter projection
 
@@ -287,6 +347,12 @@ fn normalize(config: &mut Config) {
 normalize(&mut config)
 ```
 
+The caller grants mutable access; the function's parameter type requires it.
+A callee cannot upgrade `&T` to `&mut T`. Passing `&mut` onward temporarily
+reborrows existing access. Owned local values remain locally mutable.
+The planned built-in lint warns when `&mut T` only needs read access.
+See [permission and reborrowing](docs/parameter-passing.md#permission-and-reborrowing).
+
 Chasm distinguishes safe language values and borrows from raw pointers:
 
 ```text
@@ -364,6 +430,7 @@ This fragment validates the structural syntax and call forms used in this propos
 
 ```ebnf
 namespace_path = identifier, { "::", identifier } ;
+import_decl = "import", namespace_path, [ "as", identifier ] ;
 callable_lookup = namespace_path, "#", identifier ;
 named_callable = identifier | callable_lookup ;
 data_access = expression, ".", identifier ;
@@ -373,7 +440,7 @@ arguments = positional_arguments, [ ",", named_arguments ]
           | named_arguments ;
 positional_arguments = expression, { ",", expression } ;
 named_arguments = named_argument, { ",", named_argument } ;
-named_argument = identifier, ":", expression ;
+named_argument = identifier, ":", [ expression ] ; (* omitted value is proposed same-name shorthand *)
 
 read_borrow = "&", expression ;
 mutable_borrow = "&mut", expression ;
@@ -400,7 +467,7 @@ The language direction is established. These areas still need precise specificat
 3. Borrow aliasing, lifetime inference, ownership graphs, cycles, and promotion costs.
 4. Errors, panics, stack traces, and propagation.
 5. Async execution, cancellation, concurrency, and thread safety.
-6. Imports, package boundaries, initialization, and `.chsm` behavior.
+6. Package boundaries, initialization, and `.chsm` behavior.
 7. Native ABI, bytecode format, VM instruction set, and compile-time evaluation.
 8. Reflection, attributes, package management, formatting, testing, documentation, and debugging.
 9. Validation of the proposed Rust bootstrap and staged port to a self-hosted Chasm compiler.
@@ -412,6 +479,7 @@ Every decision should preserve the central promise: Chasm code makes structure, 
 - [Language design](docs/language-design.md)
 - [Parameter passing and structural projection](docs/parameter-passing.md)
 - [Modules](docs/modules.md)
+- [Agent authoring and HTTP example](docs/agent-authoring.md)
 - [Regional memory management](docs/memory-management.md)
 - [JavaScript backend](docs/javascript-backend.md)
 - [Interoperability](docs/interop.md)

@@ -1,0 +1,4 @@
+// The smallest Chasm program.
+fn main() {
+    print("Hello, Chasm!")
+}

@@ -1,6 +1,6 @@
 # Chasm design notes: compiler plan
 
-> **Status:** Draft proposal, 2026-10-26. Nothing here is implemented, measured, or adopted.
+> **Status:** Implementation plan, 2026-10-26. The [scalar alpha](alpha.md) implements the initial interpreter and C backend. Runtime embedding is a product priority; the wider subset and feasibility gates remain proposals and have not been validated.
 >
 > A small Rust compiler implements the bootstrap subset, with a reference interpreter over typed IR, a C backend, and a JavaScript backend. A Chasm compiler then replaces the native compiler pass by pass, and a stage0 to stage3 fixed point completes native self-hosting.
 
@@ -68,7 +68,7 @@ Switch to stable F# if Rust needs disproportionate host-specific scaffolding. If
 **Recommended: interpret the typed IR.** The interpreter is the reference lane that every other lane is compared with.
 
 - Every lane shares the front end and lowering. A lowering that reverses two prints still produces well-typed IR, and the interpreter and both emitters then agree on the wrong output. An independent AST evaluator could catch that. It is optional, not a prerequisite. Hand-written expectations, including source-order and snapshot cases, are the planned guard.
-- A bytecode VM serves REPL, HMR, and plugins. It comes after self-hosting and is checked against this interpreter. Building it first would freeze an instruction set before the semantics settle.
+- Runtime scripts and plugins use the embedded typed-IR interpreter before self-hosting. A bytecode VM can later serve the same embedding surface, REPL, and HMR, checked against this interpreter. A JIT is a later optimization gated on measured need; runtime execution requires no external C compiler.
 - The IR is structured: blocks, `if`, `loop`, `break`, `continue`, `return`, and tag switches. C, JavaScript, and a later VM all consume structured control flow directly.
 - The IR spells out each semantic step. Temporaries fix evaluation order. Copies, moves, borrow reservations, integer checks, and allocation sites are explicit.
 - Semantic copies, needed for independence, differ from region transfers, needed only by native storage. The JavaScript lane drops region transfers.
@@ -151,6 +151,23 @@ Each slice runs end to end: parse, check, IR, validator, interpreter, C, runtime
 
 **Milestone 1: subset complete.** Every "in the subset" item in [Bootstrap language](bootstrap-language.md#what-first-what-later) works, every semantic gate passes on every lane, and the Scaling and Resources gates pass.
 
+## Runtime embedding track
+
+Runtime scripting and plugins are a core product requirement. Start from the
+scalar interpreter and develop embedding alongside the language slices, before
+self-hosting. The initial embedding milestone requires a host application to:
+
+- Load and check source at runtime, then call Chasm functions with typed values.
+- Register typed host functions and receive returned values and diagnostics.
+- Recover control after a script error or Chasm panic without exiting the host.
+- Own and release runtime state across repeated loads and calls, with lifetime
+  tests for host callbacks and values.
+
+This milestone runs without a C compiler and uses the interpreter. A public
+embedding API, bytecode VM, and JIT are unimplemented. The
+[interop proposal](interop.md#stable-embedding-api) defines the intended host
+operations; its stable C ABI follows validation of the embedding lifecycle.
+
 ## Porting to Chasm
 
 The Chasm compiler grows in `compiler/`, one pass at a time. Each step must reproduce the host's output byte for byte on the whole corpus, the compiler's own source included.
@@ -203,8 +220,8 @@ All of this happens in Chasm, and each item has its gate in [Bootstrap language]
 1. Resource syntax with move-only ownership and finalizers, on the semantics the Resources gate checked.
 2. Floats, user generics and traits, structural projection, closures.
 3. Named regions and explicit promotion, once the Long-lived state gate shows the need.
-4. The bytecode VM for REPL, HMR, and plugins, checked against the interpreter.
-5. C ABI, JavaScript and Lua interop, and async, each with the audit's gates.
+4. A bytecode VM for the embedding surface, REPL, and HMR, checked against the interpreter and gated on measured need.
+5. Stable C ABI, JavaScript and Lua interop, and async, each with the audit's gates. Initial interpreter embedding precedes self-hosting.
 
 ## Aspirations
 
@@ -218,9 +235,12 @@ These come from the brief. None is demonstrated.
 
 ## Open decisions for Mia
 
+**Product priority:** runtime scripting and plugins, alongside native compilation.
+Interpreter embedding precedes self-hosting. Rust remains the stage-zero host;
+validate its suitability for embedding through the runtime milestone.
+
 1. **Host.** Default Rust, confirmed or replaced by the host trial. Stable F# is the fallback, and C# 15 is an option once .NET 11 ships.
-2. **Product emphasis.** Default: the synchronous native compiler first. If production embedding comes first, revisit the host before the trial.
-3. **Language defaults.** `Int` width, copyable data versus resources, and second-class borrows are in [Bootstrap language](bootstrap-language.md#open-decisions-for-mia).
+2. **Language defaults.** `Int` width, copyable data versus resources, and second-class borrows are in [Bootstrap language](bootstrap-language.md#open-decisions-for-mia).
 
 ## Proposed layout and commands
 

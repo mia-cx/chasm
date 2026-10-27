@@ -1,0 +1,16 @@
+// Recursive factorial. 12! is the largest that fits in a 32-bit Int;
+// 13! would panic with `integer overflow`.
+fn factorial(n: Int) -> Int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+fn main() {
+    let n = 0
+    while n <= 12 {
+        print(factorial(n))
+        n = n + 1
+    }
+}
