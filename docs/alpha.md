@@ -246,9 +246,10 @@ before the panic is written to stdout first.
 | `call depth limit exceeded` | a call would make more than 10000 calls active at once, counting `main` |
 
 The interpreter and native executables apply the same call-count guard. Their
-host resource limits differ: the interpreter uses a 512 MiB worker stack, while
-native executables use the platform's main-thread stack. Large frames or deep
-recursion can exhaust either stack before the guard is reached. Host memory or
+host resource limits differ: the interpreter keeps calls and blocks on the heap,
+so recursion reaches the guard without using the host stack, while native
+executables use the platform's main-thread stack, which large frames or deep
+recursion can exhaust before the guard is reached. Host memory or
 stack exhaustion is outside the portable contract and may terminate execution
 without a Chasm panic. Infinite loops run forever on both lanes while host
 resources remain available.
@@ -263,9 +264,13 @@ with status 1, while native executables ignore them.
 
 ```text
 source → lexer → parser → checker + lowering → typed IR → IR validator
-                                                            ├── interpreter (run)
+                                                            ├── interpreter (run, embedding)
                                                             └── C emitter → cc (emit c, build)
 ```
+
+The crate is also a library: Rust applications can compile source and call
+its functions through the interpreter. [Embedding](embedding.md) describes that
+API.
 
 - The IR is structured: blocks, `if`, `loop`, `break`, and `return`. Every
   operand is a variable or a constant, and every operation stores into a

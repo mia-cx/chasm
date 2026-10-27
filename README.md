@@ -21,6 +21,8 @@ single source file. It supports typed functions, mutable locals, `if`/`else`,
 `while`, recursion, named arguments, checked 32-bit integers, booleans, and
 string literals. See the [alpha contract](docs/alpha.md) for the implemented
 syntax, commands, and limits, and [examples/](examples/) for runnable programs.
+Rust applications can also run Chasm functions in-process; see
+[Embedding](docs/embedding.md).
 
 ```sh
 cargo test --workspace

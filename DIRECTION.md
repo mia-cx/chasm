@@ -21,6 +21,12 @@ booleans, and literal strings work in single-file programs. Independent CLI
 tests compare interpreter/native results and exercise diagnostics, evaluation
 order, arithmetic traps, build safety, and optimized/UBSan C output.
 
+The Rust [embedding prototype](docs/embedding.md) compiles in-memory libraries,
+calls scalar functions, registers typed host callbacks, and returns failures as
+data. Output is captured by the runtime. Heap-backed execution stacks and
+per-call fuel bound script execution; callbacks remain trusted and memory is
+unbounded. It is a prototype API, not a sandbox.
+
 The [alpha contract](docs/alpha.md) defines implemented behavior. The wider
 language proposal remains in the [README](README.md) and design notes.
 Borrowing, resources, regions, JavaScript, and self-hosting are unimplemented;
@@ -28,12 +34,11 @@ memory feasibility and performance gates remain unperformed.
 
 ## Immediate priority
 
-Make the existing interpreter embeddable for runtime scripts and plugins before
-self-hosting. Hosts need to load and check source, register typed host functions,
-call Chasm functions, and receive values and diagnostics without terminating the
-host process. Runtime execution must work without an external C compiler.
-Interpretation is the initial execution strategy; a JIT is a later optimization
-subject to measured need and the same semantic conformance gates.
+Finish and adversarially review the bounded embedding prototype, then wayfind
+with Mia before selecting the next implementation slice. Compare its real host
+integration and execution limits with the agent-authoring goals. Embedding
+precedes self-hosting and runs without an external C compiler. A JIT is a later
+optimization subject to measured need and the same semantic conformance gates.
 
 Extend the working scalar core toward the bootstrap subset in thin slices.
 Resolve copying versus resource ownership, borrow validity during storage changes,
