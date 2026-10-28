@@ -185,22 +185,18 @@ impl Parser {
     }
 
     fn or(&mut self) -> PResult<Expr> {
-        let start = self.depth;
         let mut lhs = self.and()?;
         while *self.peek() == Tok::Or {
             lhs = self.binary(lhs, BinOp::Or, Self::and)?;
         }
-        self.depth = start;
         Ok(lhs)
     }
 
     fn and(&mut self) -> PResult<Expr> {
-        let start = self.depth;
         let mut lhs = self.not()?;
         while *self.peek() == Tok::And {
             lhs = self.binary(lhs, BinOp::And, Self::not)?;
         }
-        self.depth = start;
         Ok(lhs)
     }
 
@@ -213,10 +209,7 @@ impl Parser {
         self.enter()?;
         let operand = self.not()?;
         self.depth -= 1;
-        Ok(Expr {
-            kind: ExprKind::Not(Box::new(operand)),
-            span,
-        })
+        self.node(ExprKind::Not(Box::new(operand)), span)
     }
 
     fn compare(&mut self) -> PResult<Expr> {
@@ -228,12 +221,10 @@ impl Parser {
         if comparison(self.peek()).is_some() {
             return Err(self.error("comparisons cannot be chained; combine them with `and`"));
         }
-        self.depth -= 1;
         Ok(expr)
     }
 
     fn sum(&mut self) -> PResult<Expr> {
-        let start = self.depth;
         let mut lhs = self.product()?;
         loop {
             let op = match self.peek() {
@@ -243,12 +234,10 @@ impl Parser {
             };
             lhs = self.binary(lhs, op, Self::product)?;
         }
-        self.depth = start;
         Ok(lhs)
     }
 
     fn product(&mut self) -> PResult<Expr> {
-        let start = self.depth;
         let mut lhs = self.unary()?;
         loop {
             let op = match self.peek() {
@@ -259,15 +248,10 @@ impl Parser {
             };
             lhs = self.binary(lhs, op, Self::unary)?;
         }
-        self.depth = start;
         Ok(lhs)
     }
 
     /// Consumes the operator at the cursor and parses its right operand.
-    ///
-    /// Each operator in a chain deepens the left-leaning tree by one, so it
-    /// counts toward the nesting limit until the caller's chain ends and
-    /// restores the depth. Later passes recurse over that tree.
     fn binary(
         &mut self,
         lhs: Expr,
@@ -275,13 +259,9 @@ impl Parser {
         rhs: fn(&mut Self) -> PResult<Expr>,
     ) -> PResult<Expr> {
         let span = self.span();
-        self.enter()?;
         self.bump();
         let rhs = rhs(self)?;
-        Ok(Expr {
-            kind: ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)),
-            span,
-        })
+        self.node(ExprKind::Binary(op, Box::new(lhs), Box::new(rhs)), span)
     }
 
     fn unary(&mut self) -> PResult<Expr> {
@@ -296,18 +276,12 @@ impl Parser {
             self.bump();
             let value =
                 i32::try_from(-i64::from(magnitude)).expect("lexer caps literal magnitude at 2^31");
-            return Ok(Expr {
-                kind: ExprKind::Int(value),
-                span,
-            });
+            return self.node(ExprKind::Int(value), span);
         }
         self.enter()?;
         let operand = self.unary()?;
         self.depth -= 1;
-        Ok(Expr {
-            kind: ExprKind::Neg(Box::new(operand)),
-            span,
-        })
+        self.node(ExprKind::Neg(Box::new(operand)), span)
     }
 
     fn primary(&mut self) -> PResult<Expr> {
@@ -335,7 +309,7 @@ impl Parser {
             _ => return Err(self.unexpected("an expression")),
         };
         self.bump();
-        Ok(Expr { kind, span })
+        self.node(kind, span)
     }
 
     fn call(&mut self, callee: String) -> PResult<Expr> {
@@ -366,10 +340,7 @@ impl Parser {
             }
         }
         self.bump();
-        Ok(Expr {
-            kind: ExprKind::Call { callee, args },
-            span,
-        })
+        self.node(ExprKind::Call { callee, args }, span)
     }
 
     fn ident(&mut self, expected: &str) -> PResult<(String, Span)> {
@@ -397,9 +368,34 @@ impl Parser {
         found
     }
 
+    /// Opens a level while the parser descends into nested syntax.
     fn enter(&mut self) -> PResult<()> {
         self.depth += 1;
-        if self.depth > MAX_NESTING {
+        self.check_nesting(self.depth)
+    }
+
+    /// Builds an expression one level above its tallest operand.
+    ///
+    /// A chain such as `1 + 2 + 3` is built in a loop, and each operator sinks
+    /// the tree built so far one level deeper. Descent depth alone misses that,
+    /// so every node checks its full height from the current depth.
+    fn node(&self, kind: ExprKind, span: Span) -> PResult<Expr> {
+        let height = match &kind {
+            ExprKind::Int(_) | ExprKind::Bool(_) | ExprKind::Str(_) | ExprKind::Var(_) => 0,
+            ExprKind::Neg(operand) | ExprKind::Not(operand) => operand.height + 1,
+            ExprKind::Binary(_, lhs, rhs) => lhs.height.max(rhs.height) + 1,
+            ExprKind::Call { args, .. } => args
+                .iter()
+                .map(|arg| arg.value.height + 1)
+                .max()
+                .unwrap_or(0),
+        };
+        self.check_nesting(self.depth + height)?;
+        Ok(Expr { kind, span, height })
+    }
+
+    fn check_nesting(&self, depth: u32) -> PResult<()> {
+        if depth > MAX_NESTING {
             return Err(self.error(format!(
                 "nesting is too deep; the limit is {MAX_NESTING} levels"
             )));

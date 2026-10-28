@@ -8,7 +8,7 @@
 use std::fmt::Write;
 
 use crate::ir::{
-    BinOp, Function, MAX_CALL_DEPTH, Operand, PANIC_CALL_DEPTH, PANIC_DIVIDE_BY_ZERO,
+    BinOp, Callee, Function, MAX_CALL_DEPTH, Operand, PANIC_CALL_DEPTH, PANIC_DIVIDE_BY_ZERO,
     PANIC_OVERFLOW, Program, Rvalue, Stmt, Ty,
 };
 
@@ -37,7 +37,8 @@ pub fn emit(program: &Program, source_path: &str) -> String {
         c.push('\n');
         emit_function(&mut c, program, function);
     }
-    let main = &program.functions[program.main].name;
+    let main = program.main.expect("the CLI compiles programs with `main`");
+    let main = &program.functions[main].name;
     let _ = write!(
         c,
         "\nint main(void) {{\n    chasm_fn_{main}();\n    return 0;\n}}\n"
@@ -196,9 +197,9 @@ impl Emitter<'_> {
         match stmt {
             Stmt::Assign {
                 dst,
-                value: Rvalue::Call { func, args, span },
+                value: Rvalue::Call { callee, args, span },
             } => {
-                let call = self.call(*func, args);
+                let call = self.call(*callee, args);
                 self.line(depth, &format!("chasm_enter({}, {});", span.line, span.col));
                 self.line(depth, &format!("l{dst} = {call};"));
                 self.line(depth, "chasm_depth--;");
@@ -207,8 +208,8 @@ impl Emitter<'_> {
                 let value = self.rvalue(value);
                 self.line(depth, &format!("l{dst} = {value};"));
             }
-            Stmt::Call { func, args, span } => {
-                let call = self.call(*func, args);
+            Stmt::Call { callee, args, span } => {
+                let call = self.call(*callee, args);
                 self.line(depth, &format!("chasm_enter({}, {});", span.line, span.col));
                 self.line(depth, &format!("{call};"));
                 self.line(depth, "chasm_depth--;");
@@ -280,11 +281,14 @@ impl Emitter<'_> {
                 )
             }
             Rvalue::Not(operand) => format!("!{}", operand_c(*operand)),
-            Rvalue::Call { func, args, .. } => self.call(*func, args),
+            Rvalue::Call { callee, args, .. } => self.call(*callee, args),
         }
     }
 
-    fn call(&self, func: usize, args: &[Operand]) -> String {
+    fn call(&self, callee: Callee, args: &[Operand]) -> String {
+        let Callee::Fn(func) = callee else {
+            unreachable!("the CLI registers no host functions")
+        };
         let args: Vec<String> = args.iter().map(|arg| operand_c(*arg)).collect();
         let name = &self.program.functions[func].name;
         format!("chasm_fn_{name}({})", args.join(", "))

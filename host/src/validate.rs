@@ -4,15 +4,17 @@
 //! placement, and returns on every path. They catch some lowering mistakes;
 //! they do not show that lowering preserved the source program's meaning.
 
-use crate::ir::{BinOp, Function, Operand, Program, Rvalue, Stmt, Ty};
+use crate::ir::{BinOp, Callee, Function, Operand, Program, Rvalue, Stmt, Ty};
 
 pub fn validate(program: &Program) -> Result<(), String> {
-    let main = program
-        .functions
-        .get(program.main)
-        .ok_or("`main` index is out of range")?;
-    if main.param_count != 0 || main.ret.is_some() {
-        return Err("`main` must take no parameters and return no value".into());
+    if let Some(main) = program.main {
+        let main = program
+            .functions
+            .get(main)
+            .ok_or("`main` index is out of range")?;
+        if main.param_count != 0 || main.ret.is_some() {
+            return Err("`main` must take no parameters and return no value".into());
+        }
     }
     for function in &program.functions {
         let check = Checker { program, function };
@@ -54,7 +56,7 @@ impl Checker<'_> {
                 let value_ty = self.rvalue(value)?;
                 expect(dst_ty, value_ty, "assignment")
             }
-            Stmt::Call { func, args, .. } => self.call(*func, args).map(|_| ()),
+            Stmt::Call { callee, args, .. } => self.call(*callee, args).map(|_| ()),
             Stmt::Print(operand) => self.operand(*operand).map(|_| ()),
             Stmt::If {
                 cond,
@@ -113,25 +115,40 @@ impl Checker<'_> {
                 expect(Ty::Bool, self.operand(*operand)?, "`not` operand")?;
                 Ok(Ty::Bool)
             }
-            Rvalue::Call { func, args, .. } => self
-                .call(*func, args)?
+            Rvalue::Call { callee, args, .. } => self
+                .call(*callee, args)?
                 .ok_or_else(|| "using the result of a call that returns no value".into()),
         }
     }
 
-    fn call(&self, func: usize, args: &[Operand]) -> Result<Option<Ty>, String> {
-        let callee = self
-            .program
-            .functions
-            .get(func)
-            .ok_or("call to an unknown function index")?;
-        if args.len() != callee.param_count {
-            return Err(format!("wrong argument count for `{}`", callee.name));
+    fn call(&self, callee: Callee, args: &[Operand]) -> Result<Option<Ty>, String> {
+        let (name, params, ret): (_, Vec<Ty>, _) = match callee {
+            Callee::Fn(id) => {
+                let function = self
+                    .program
+                    .functions
+                    .get(id)
+                    .ok_or("call to an unknown function index")?;
+                let params = function.locals.iter().take(function.param_count);
+                let params = params.map(|local| local.ty).collect();
+                (&function.name, params, function.ret)
+            }
+            Callee::Host(id) => {
+                let host = self
+                    .program
+                    .hosts
+                    .get(id)
+                    .ok_or("call to an unknown host function index")?;
+                (&host.name, host.params.clone(), host.ret)
+            }
+        };
+        if args.len() != params.len() {
+            return Err(format!("wrong argument count for `{name}`"));
         }
-        for (arg, param) in args.iter().zip(&callee.locals) {
-            expect(param.ty, self.operand(*arg)?, "argument")?;
+        for (arg, param) in args.iter().zip(params) {
+            expect(param, self.operand(*arg)?, "argument")?;
         }
-        Ok(callee.ret)
+        Ok(ret)
     }
 
     fn operand(&self, operand: Operand) -> Result<Ty, String> {

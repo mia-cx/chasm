@@ -57,6 +57,9 @@ pub enum Stmt {
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
+    /// Levels of expression below this one; 0 for a leaf. The parser bounds it
+    /// so the recursive passes stay off the end of the host stack.
+    pub height: u32,
 }
 
 pub enum ExprKind {

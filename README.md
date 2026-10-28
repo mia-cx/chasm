@@ -21,6 +21,8 @@ single source file. It supports typed functions, mutable locals, `if`/`else`,
 `while`, recursion, named arguments, checked 32-bit integers, booleans, and
 string literals. See the [alpha contract](docs/alpha.md) for the implemented
 syntax, commands, and limits, and [examples/](examples/) for runnable programs.
+Rust applications can also run Chasm functions in-process; see
+[Embedding](docs/embedding.md).
 
 ```sh
 cargo test --workspace
@@ -103,8 +105,8 @@ Runtime scripting and plugins are core requirements. An application should be
 able to load Chasm source, check it, and execute it through an embedded runtime
 without an external C compiler. The typed-IR interpreter is the initial path;
 a bytecode VM or JIT can improve execution speed later. Embedding comes before
-self-hosting. The alpha currently provides CLI interpretation through `chasm run`;
-it has no public embedding API or JIT.
+self-hosting. The alpha provides CLI interpretation through `chasm run` and a
+prototype Rust [embedding API](docs/embedding.md); it has no JIT.
 
 The runtime also supports the planned REPL, hot module replacement, and local development. Native compilation supports release binaries, servers, desktop applications, and command-line tools. JavaScript compilation supports browsers, Node.js, and worker runtimes without requiring WebAssembly.
 
