@@ -148,10 +148,11 @@ Precedence runs from loosest to tightest: `or`, `and`, `not`, comparisons,
 left-associative. Comparisons do not chain: `a < b < c` is an error.
 
 Nesting is limited to 200 levels. Each block, `else if`, parenthesized
-expression, call argument, condition, unary `-` or `not`, and each binary
-operator in a chain such as `1 + 2 + 3` adds a level while it is open, so a
-chain of more than about 200 operators in one expression is rejected. Split
-long expressions with `let`.
+expression, call argument, condition, unary `-` or `not`, and binary operator
+adds a level. In a chain such as `1 + 2 + 3`, each operator nests everything
+to its left one level deeper, so a chain of more than about 200 operators in
+one expression is rejected. Parentheses do not reset the count. Split long
+expressions with `let`.
 
 ### Declarations and names
 

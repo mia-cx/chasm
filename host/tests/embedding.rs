@@ -373,6 +373,73 @@ fn deep_recursion_through_nested_blocks_fits_a_default_thread_stack() {
     assert_eq!(dive, int(9999));
 }
 
+#[test]
+fn excessive_compiler_nesting_returns_diagnostics_without_aborting_the_host() {
+    const CHILD_CASE: &str = "CHASM_COMPILE_NESTING_CHILD";
+    if let Ok(case) = std::env::var(CHILD_CASE) {
+        std::thread::Builder::new()
+            .stack_size(2 << 20)
+            .spawn(move || {
+                let mut expression = match case.as_str() {
+                    "invalid" => "missing",
+                    "boolean" => "true",
+                    _ => "1",
+                }
+                .to_owned();
+                for _ in 0..70 {
+                    expression = match case.as_str() {
+                        "boolean" => format!("({expression}){}", " and true".repeat(70)),
+                        "calls" => format!("id(({expression}){})", " + 1".repeat(70)),
+                        _ => format!("({expression}){}", " + 1".repeat(70)),
+                    };
+                }
+                if case == "syntax" {
+                    expression.push_str(" + @");
+                }
+                let ty = if case == "boolean" { "Bool" } else { "Int" };
+                let source = format!(
+                    "fn id(n: Int) -> Int {{ return n }}\nfn run() -> {ty} {{ return {expression} }}"
+                );
+                let mut runtime = Runtime::new();
+                let Err(CompileError::Source(diagnostics)) = runtime.compile(&source) else {
+                    panic!("excessive nesting must return source diagnostics");
+                };
+                assert!(diagnostics[0].message.contains("nesting is too deep"));
+                assert_eq!(diagnostics[0].span.line, 2);
+                // Ordinary composite expressions still compile, and a rejected
+                // script leaves the same runtime usable.
+                let expression = format!("(1{}){}", " + 1".repeat(40), " + 1".repeat(40));
+                let source = format!("fn ok() -> Int {{ return {expression} }}");
+                let script = runtime.compile(&source).unwrap();
+                assert_eq!(runtime.call(&script, "ok", &[]).unwrap(), int(81));
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+        return;
+    }
+
+    // Stack overflow aborts the whole process, so isolate each probe and
+    // assert that the public API returns normally on an ordinary host stack.
+    for case in ["arithmetic", "invalid", "boolean", "calls", "syntax"] {
+        let child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "excessive_compiler_nesting_returns_diagnostics_without_aborting_the_host",
+                "--nocapture",
+            ])
+            .env(CHILD_CASE, case)
+            .output()
+            .unwrap();
+        assert!(
+            child.status.success(),
+            "{case}: {}\n{}",
+            String::from_utf8_lossy(&child.stdout),
+            String::from_utf8_lossy(&child.stderr)
+        );
+    }
+}
+
 /// Set in the child process of `print_writes_to_runtime_output_not_stdout`.
 const CHILD: &str = "CHASM_EMBED_STDOUT_CHILD";
 const MARKER: &str = "printed-by-chasm";
