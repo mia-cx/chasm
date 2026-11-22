@@ -14,6 +14,7 @@ import os
 import pathlib
 import re
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.error
@@ -94,6 +95,10 @@ def extract(reply):
     return blocks[-1] if blocks else reply
 
 
+# Generated programs run without the API key in their environment.
+SANDBOX_ENV = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+
+
 def run(lang, source, timeout=10):
     """Return (exit status, stdout, stderr) for one program."""
     with tempfile.TemporaryDirectory() as directory:
@@ -105,18 +110,20 @@ def run(lang, source, timeout=10):
             command = ["lua", str(path)]
         else:
             binary = pathlib.Path(directory) / "program"
-            built = subprocess.run(
-                ["rustc", "--edition", "2021", "-o", str(binary), str(path)],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
+            try:
+                built = subprocess.run(
+                    ["rustc", "--edition", "2021", "-o", str(binary), str(path)],
+                    capture_output=True, text=True, timeout=120, env=SANDBOX_ENV,
+                )
+            except subprocess.TimeoutExpired:
+                return None, "", "rustc timed out after 120 seconds"
             if built.returncode != 0:
                 return built.returncode, "", built.stderr
             command = [str(binary)]
         try:
             result = subprocess.run(
-                command, capture_output=True, text=True, timeout=timeout, cwd=directory
+                command, capture_output=True, text=True, timeout=timeout, cwd=directory,
+                env=SANDBOX_ENV,
             )
         except subprocess.TimeoutExpired:
             return None, "", f"timed out after {timeout} seconds"
@@ -237,16 +244,26 @@ def main():
         raise SystemExit("Set ANTHROPIC_API_KEY.")
     ref_tokens = {lang: reference_tokens(lang, args.model, key) for lang in langs}
     jobs = [(t, l, n) for t in tasks for l in langs for n in range(1, args.trials + 1)]
-    with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
-        records = list(pool.map(lambda job: attempt_task(*job, args, key), jobs))
-
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     out = ROOT / "eval" / "results" / f"{stamp}-{args.model}"
     out.mkdir(parents=True)
-    with open(out / "runs.jsonl", "w") as file:
-        for record in records:
+    records, skipped = [], 0
+    with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool, \
+            open(out / "runs.jsonl", "w") as file:
+        futures = {pool.submit(attempt_task, *job, args, key): job for job in jobs}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                record = future.result()
+            except Exception as error:
+                print(f"skipped {futures[future]}: {error}", file=sys.stderr)
+                skipped += 1
+                continue
+            records.append(record)
             file.write(json.dumps(record) + "\n")
+            file.flush()
     summary = summarize(records, ref_tokens, args)
+    if skipped:
+        summary += f"\n{skipped} runs errored before finishing and are not counted.\n"
     (out / "summary.md").write_text(summary)
     print(summary)
     print(f"Wrote {out.relative_to(ROOT)}")
