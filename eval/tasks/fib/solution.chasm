@@ -1,0 +1,14 @@
+fn main() {
+    let a = 0
+    let b = 1
+    let n = 0
+    while n <= 46 {
+        print(a)
+        let next = b
+        if n < 45 {
+            b = a + b
+        }
+        a = next
+        n = n + 1
+    }
+}

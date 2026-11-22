@@ -1,0 +1,25 @@
+fn isqrt(n: Int) -> Int {
+    let low = 0
+    let high = 46341
+    while high - low > 1 {
+        let mid = (low + high) / 2
+        if mid <= n / mid {
+            low = mid
+        } else {
+            high = mid
+        }
+    }
+    if n < 1 {
+        return 0
+    }
+    return low
+}
+
+fn main() {
+    print(isqrt(0))
+    print(isqrt(1))
+    print(isqrt(15))
+    print(isqrt(16))
+    print(isqrt(1000000))
+    print(isqrt(2147483647))
+}

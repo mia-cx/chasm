@@ -1,0 +1,20 @@
+fn isPrime(n: Int) -> Bool {
+    let d = 2
+    while d * d <= n {
+        if n % d == 0 {
+            return false
+        }
+        d = d + 1
+    }
+    return n >= 2
+}
+
+fn main() {
+    let n = 2
+    while n < 100 {
+        if isPrime(n) {
+            print(n)
+        }
+        n = n + 1
+    }
+}

@@ -1,0 +1,32 @@
+fn digitSum(value: Int) -> Int {
+    let n = value
+    let sum = 0
+    while n > 0 {
+        sum = sum + n % 10
+        n = n / 10
+    }
+    return sum
+}
+
+fn reverse(value: Int) -> Int {
+    let n = value
+    let result = 0
+    while n > 0 {
+        result = result * 10 + n % 10
+        n = n / 10
+    }
+    return result
+}
+
+fn show(n: Int) {
+    print(digitSum(n))
+    print(reverse(n))
+}
+
+fn main() {
+    show(0)
+    show(7)
+    show(1234)
+    show(90210)
+    show(123456789)
+}
