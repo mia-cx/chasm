@@ -1,0 +1,12 @@
+1900
+common
+1996
+leap
+2000
+leap
+2023
+common
+2024
+leap
+2100
+common

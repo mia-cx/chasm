@@ -1,0 +1,9 @@
+fn main() {
+    let c = 1
+    let k = 0
+    while k <= 20 {
+        print(c)
+        c = c * (20 - k) / (k + 1)
+        k = k + 1
+    }
+}

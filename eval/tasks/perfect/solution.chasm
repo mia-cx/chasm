@@ -1,0 +1,30 @@
+fn divisorSum(n: Int) -> Int {
+    let sum = 0
+    let d = 1
+    while d < n {
+        if n % d == 0 {
+            sum = sum + d
+        }
+        d = d + 1
+    }
+    return sum
+}
+
+fn main() {
+    let n = 2
+    while n < 10000 {
+        if divisorSum(n) == n {
+            print(n)
+        }
+        n = n + 1
+    }
+    let abundant = 0
+    n = 1
+    while n < 1000 {
+        if divisorSum(n) > n {
+            abundant = abundant + 1
+        }
+        n = n + 1
+    }
+    print(abundant)
+}

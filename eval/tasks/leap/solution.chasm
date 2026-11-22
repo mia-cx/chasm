@@ -1,0 +1,21 @@
+fn isLeap(year: Int) -> Bool {
+    return year % 4 == 0 and year % 100 != 0 or year % 400 == 0
+}
+
+fn show(year: Int) {
+    print(year)
+    if isLeap(year) {
+        print("leap")
+    } else {
+        print("common")
+    }
+}
+
+fn main() {
+    show(1900)
+    show(1996)
+    show(2000)
+    show(2023)
+    show(2024)
+    show(2100)
+}

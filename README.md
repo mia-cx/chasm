@@ -1,5 +1,12 @@
 # Chasm
 
+<a href="https://0rwx.com">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://0rwx.com/static/AI-W-dark.svg">
+    <img alt="AI:W" src="https://0rwx.com/static/AI-W-light.svg" height="48">
+  </picture>
+</a>
+
 > Status: `0.1.0-alpha.1` — a scalar compiler alpha alongside the language proposal.
 
 Chasm is a statically typed, data-oriented programming language with one semantic model across interpreted and compiled execution.
